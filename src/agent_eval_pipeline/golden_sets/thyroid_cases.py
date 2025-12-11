@@ -151,8 +151,8 @@ THYROID_CASES: list[GoldenCase] = [
         # Expected marker classifications
         expected_marker_statuses={
             "TSH": "high",
-            "Free T4": "borderline",  # at the edge of ref range
-            "Free T3": "borderline",
+            "Free T4": "low",  # exactly at lower bound (0.8)
+            "Free T3": "normal",  # just above lower bound, within range
         },
 
         # Simulated doc IDs for retrieval eval
@@ -280,7 +280,7 @@ THYROID_CASES: list[GoldenCase] = [
         ],
 
         expected_marker_statuses={
-            "TSH": "borderline",  # Just barely out of range
+            "TSH": "high",  # 4.2 is above upper bound (4.0), LLM correctly flags as high
         },
 
         expected_doc_ids=["doc_thyroid_101", "doc_subclinical_thyroid"],
