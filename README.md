@@ -39,9 +39,11 @@ agent_eval_pipeline/
 ├── retrieval/              # Vector store + RAG
 │   ├── store.py            # PgVector + InMemory implementations
 │   └── seeds/              # Medical knowledge base
-├── agent/                  # Agent implementations
-│   ├── langgraph_agent.py  # LangGraph state machine
-│   ├── dspy_agent.py       # DSPy declarative agent
+├── agent/                  # Agent implementations (2 active)
+│   ├── state.py            # AgentState TypedDict
+│   ├── nodes/              # LangGraph node functions
+│   ├── graph.py            # LangGraph graph builder
+│   ├── langgraph_runner.py # LangGraph execution
 │   └── dspy_react_agent.py # DSPy ReAct with tools
 ├── evals/                  # Evaluation gates
 │   ├── schema_eval.py      # Pydantic validation
@@ -50,96 +52,60 @@ agent_eval_pipeline/
 │   │   ├── dspy_judge.py   # DSPy-optimizable judge
 │   │   └── evaluator.py    # Traditional judge
 │   ├── deepeval/           # DeepEval integration
-│   │   ├── adapters.py     # GoldenCase → LLMTestCase
-│   │   ├── metrics.py      # Custom G-Eval healthcare metrics
-│   │   └── evaluator.py    # DeepEval runner
 │   ├── ragas/              # RAGAS integration
-│   │   ├── adapters.py     # GoldenCase → SingleTurnSample
-│   │   ├── metrics.py      # Faithfulness, Context P/R
-│   │   └── evaluator.py    # RAGAS runner
 │   └── perf/               # Performance regression
 ├── harness/                # Evaluation orchestration
-│   ├── runner.py           # Original eval runner
-│   └── unified_runner.py   # Multi-framework runner
+│   ├── runner.py           # Eval gates runner
+│   └── comparative_runner.py # Agent comparison runner
+├── observability/          # Phoenix/OpenTelemetry tracing
 └── cli/                    # Command-line interface
 ```
 
 ## Running the Agents
 
-### LangGraph Agent (State Machine)
+The pipeline supports two agent implementations, selectable via `AGENT_TYPE` env var or `agent_type` parameter.
+
+### LangGraph Agent (State Machine) - Default
 
 The LangGraph agent uses an explicit state machine with nodes for retrieval, analysis, and safety checks.
 
 ```bash
-# Run via Python
+# Run via unified interface
 PYTHONPATH=src python -c "
 from agent_eval_pipeline.agent import run_agent
 from agent_eval_pipeline.golden_sets.thyroid_cases import get_case_by_id
 
 case = get_case_by_id('thyroid-001')
-result = run_agent(case, use_langgraph=True)
+result = run_agent(case, agent_type='langgraph')
 
 print('Summary:', result.output.summary)
 print('Latency:', result.latency_ms, 'ms')
+print('Retrieved docs:', len(result.retrieved_docs or []))
 "
 ```
 
 **When to use LangGraph:**
-- Complex multi-step workflows
+- Complex multi-step workflows with RAG retrieval
+- Need explicit state management and checkpointing
+- Want to trace execution through discrete nodes
 - Human-in-the-loop requirements
-- Explicit state management needed
-- Checkpointing/resumption required
-
-### DSPy Agent (Declarative)
-
-The DSPy agent uses signatures (I/O specs) and lets DSPy handle prompting.
-
-```bash
-# Run the basic DSPy agent
-PYTHONPATH=src python -c "
-from agent_eval_pipeline.agent.dspy_agent import run_dspy_agent
-
-result = run_dspy_agent(
-    query='What do my thyroid results indicate?',
-    labs=[
-        {'marker': 'TSH', 'value': 5.5, 'unit': 'mIU/L', 'ref_low': 0.4, 'ref_high': 4.0},
-        {'marker': 'Free T4', 'value': 0.9, 'unit': 'ng/dL', 'ref_low': 0.8, 'ref_high': 1.8},
-    ],
-    symptoms=['fatigue', 'weight gain']
-)
-
-print('Summary:', result.output.summary)
-print('Reasoning:', result.reasoning[:200], '...')
-"
-```
-
-**When to use DSPy:**
-- Prompt optimization is important
-- Structured output requirements
-- Want automatic few-shot example selection
-- Experimenting with different approaches
 
 ### DSPy ReAct Agent (Tool-Using)
 
-The ReAct agent can call tools to gather information before responding.
+The ReAct agent uses DSPy's declarative approach with explicit tool calls for reasoning.
 
 ```bash
 # Run the ReAct agent with tools
 PYTHONPATH=src python -c "
-from agent_eval_pipeline.agent.dspy_react_agent import run_react_agent
+from agent_eval_pipeline.agent import run_agent
+from agent_eval_pipeline.golden_sets.thyroid_cases import get_case_by_id
 
-result = run_react_agent(
-    query='I take levothyroxine and biotin. My TSH is low - should I worry?',
-    labs=[
-        {'marker': 'TSH', 'value': 0.2, 'unit': 'mIU/L', 'ref_low': 0.4, 'ref_high': 4.0},
-        {'marker': 'Free T4', 'value': 1.1, 'unit': 'ng/dL', 'ref_low': 0.8, 'ref_high': 1.8},
-    ],
-    medications=['levothyroxine 75mcg', 'biotin 5000mcg'],
-    symptoms=['anxiety']
-)
+case = get_case_by_id('thyroid-001')
+result = run_agent(case, agent_type='dspy_react')
 
+print('Summary:', result.output.summary)
 print('Tools used:', result.tools_used)
-print('Analysis:', result.analysis)
+print('Reasoning steps:', result.reasoning_steps)
 "
 ```
 
@@ -147,6 +113,12 @@ print('Analysis:', result.analysis)
 - `lookup_reference_range` - Get standard ranges for markers
 - `check_medication_interaction` - Check if meds affect lab values
 - `search_medical_context` - Search medical knowledge base
+
+**When to use DSPy ReAct:**
+- Want explicit reasoning traces
+- Need tool-based information gathering
+- Prefer declarative prompt specifications
+- Experimenting with different approaches
 
 ## Running Evaluations
 
@@ -255,33 +227,6 @@ compare_judges(case, result.output)
 "
 ```
 
-## DSPy Optimization
-
-DSPy can automatically optimize prompts using examples:
-
-```python
-from agent_eval_pipeline.agent.dspy_agent import (
-    create_dspy_agent,
-    optimize_agent,
-    golden_cases_to_trainset,
-)
-from agent_eval_pipeline.golden_sets.thyroid_cases import get_all_golden_cases
-
-# Create agent and training set
-agent = create_dspy_agent()
-trainset = golden_cases_to_trainset(get_all_golden_cases())
-
-# Optimize (finds better prompts automatically)
-optimized_agent = optimize_agent(
-    agent,
-    trainset=trainset,
-    optimizer_type="bootstrap",  # or "mipro" for more thorough
-)
-
-# Use the optimized agent
-result = optimized_agent(query="...", labs=[...])
-```
-
 ## Testing
 
 ```bash
@@ -333,16 +278,16 @@ workflow.add_node("analyze", analyze_node)
 workflow.add_edge("retrieve", "analyze")
 ```
 
-## LangGraph vs DSPy Comparison
+## LangGraph vs DSPy ReAct Comparison
 
-| Aspect | LangGraph | DSPy |
-|--------|-----------|------|
-| **Paradigm** | Imperative (how) | Declarative (what) |
-| **Prompts** | Hand-written | Auto-optimized |
-| **State** | Explicit TypedDict | Implicit |
-| **Testing** | Node isolation | Signature introspection |
-| **Best for** | Complex workflows | Prompt optimization |
-| **Debugging** | State inspection | Reasoning traces |
+| Aspect | LangGraph | DSPy ReAct |
+|--------|-----------|------------|
+| **Paradigm** | Imperative state machine | Declarative with tools |
+| **Retrieval** | RAG via vector store | Tool-based lookup |
+| **State** | Explicit TypedDict | Implicit in ReAct loop |
+| **Reasoning** | Node-by-node | Thought-Action-Observation |
+| **Best for** | Complex workflows | Explicit reasoning traces |
+| **Debugging** | State inspection | Tool call history |
 
 ## Evaluation Framework Comparison
 
@@ -357,8 +302,8 @@ workflow.add_edge("retrieve", "analyze")
 
 ## Interview Talking Points
 
-1. **"Why multiple agent implementations?"**
-   > "LangGraph and DSPy represent different paradigms. LangGraph is imperative - I control the exact flow with explicit state. DSPy is declarative - I specify what I want and it figures out how. Having both lets me choose the right tool for each situation."
+1. **"Why two agent implementations?"**
+   > "LangGraph and DSPy ReAct represent different paradigms. LangGraph is a state machine with RAG retrieval - I control the exact flow through nodes. DSPy ReAct uses tool-based reasoning with explicit thought traces. Both produce the same LabInsightsSummary schema, so I can fairly compare them using the comparative eval runner."
 
 2. **"How do you test LLM-based code?"**
    > "Multiple layers: Protocol-based mocks for unit tests, golden cases for integration tests, LLM-as-judge for semantic quality. The InMemoryVectorStore and MockEmbeddings let me test the full flow without API calls."
