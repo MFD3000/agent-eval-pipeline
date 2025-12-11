@@ -377,13 +377,24 @@ def run_react_agent(
     # DSPy ReAct stores trajectory in the prediction
     if hasattr(prediction, 'trajectory'):
         trajectory = prediction.trajectory
-        # Count tool calls in trajectory
-        for step in trajectory.split('\n'):
-            if 'Tool:' in step or 'Action:' in step:
-                reasoning_steps += 1
-            for tool_name in ['lookup_reference_range', 'check_medication_interaction', 'search_medical_context']:
-                if tool_name in step and tool_name not in tools_used:
-                    tools_used.append(tool_name)
+        # Trajectory can be a dict or string depending on DSPy version
+        if isinstance(trajectory, dict):
+            # Extract tool calls from dict format
+            for key, value in trajectory.items():
+                if 'tool' in key.lower() or 'action' in key.lower():
+                    reasoning_steps += 1
+                value_str = str(value)
+                for tool_name in ['lookup_reference_range', 'check_medication_interaction', 'search_medical_context']:
+                    if tool_name in value_str and tool_name not in tools_used:
+                        tools_used.append(tool_name)
+        elif isinstance(trajectory, str):
+            # Count tool calls in string trajectory
+            for step in trajectory.split('\n'):
+                if 'Tool:' in step or 'Action:' in step:
+                    reasoning_steps += 1
+                for tool_name in ['lookup_reference_range', 'check_medication_interaction', 'search_medical_context']:
+                    if tool_name in step and tool_name not in tools_used:
+                        tools_used.append(tool_name)
 
     return ReActAgentResult(
         analysis=prediction.analysis,
@@ -393,61 +404,127 @@ def run_react_agent(
 
 
 # ---------------------------------------------------------------------------
-# COMPARISON: SIMPLE VS REACT
+# EVAL-COMPATIBLE INTERFACE
 # ---------------------------------------------------------------------------
 
 
-def compare_simple_vs_react(
-    query: str,
-    labs: list[dict],
-    medications: list[str] | None = None,
-    symptoms: list[str] | None = None,
-):
+@dataclass
+class ReActEvalResult:
+    """Result from ReAct agent for evaluation pipeline compatibility."""
+    output: "LabInsightsSummary"
+    input_tokens: int
+    output_tokens: int
+    tools_used: list[str]
+    reasoning_steps: int
+
+
+def run_react_agent_for_eval(
+    case: "GoldenCase",
+    model: str = "gpt-4o-mini",
+) -> ReActEvalResult:
     """
-    Compare simple DSPy agent vs ReAct agent.
+    Run the ReAct agent on a GoldenCase and return structured output.
 
-    Useful for demonstrating when tool use adds value.
+    This function bridges the ReAct agent's freeform analysis to the
+    LabInsightsSummary schema required by the eval pipeline.
+
+    It works by:
+    1. Running ReAct to get analysis + tool use info
+    2. Running a second pass to structure the analysis into LabInsightsSummary
+
+    Args:
+        case: GoldenCase to analyze
+        model: OpenAI model to use
+
+    Returns:
+        ReActEvalResult with LabInsightsSummary output
     """
-    from agent_eval_pipeline.agent.dspy_agent import run_dspy_agent
+    from agent_eval_pipeline.golden_sets.thyroid_cases import GoldenCase
+    from agent_eval_pipeline.schemas.lab_insights import (
+        LabInsightsSummary,
+        MarkerInsight,
+        SafetyNote,
+    )
 
-    print("=" * 60)
-    print("COMPARISON: Simple DSPy vs ReAct Agent")
-    print("=" * 60)
+    # Format labs for ReAct
+    labs = [
+        {
+            "marker": lab.marker,
+            "value": lab.value,
+            "unit": lab.unit,
+            "ref_low": lab.ref_low,
+            "ref_high": lab.ref_high,
+        }
+        for lab in case.labs
+    ]
 
-    print(f"\nQuery: {query}")
-    print(f"Labs: {labs}")
-    print(f"Medications: {medications}")
-    print(f"Symptoms: {symptoms}")
+    # Run ReAct agent to get analysis
+    react_result = run_react_agent(
+        query=case.query,
+        labs=labs,
+        medications=None,  # GoldenCase doesn't have medications currently
+        symptoms=case.symptoms,
+        model=model,
+    )
 
-    # Simple agent
-    print("\n" + "-" * 40)
-    print("[Simple DSPy Agent]")
-    print("-" * 40)
-    try:
-        simple_result = run_dspy_agent(
-            query=query,
-            labs=labs,
-            symptoms=symptoms,
-        )
-        print(simple_result.output.summary)
-    except Exception as e:
-        print(f"Error: {e}")
+    # Now convert the freeform analysis to structured LabInsightsSummary
+    # We use OpenAI's structured output for this
+    from openai import OpenAI
+    import json
 
-    # ReAct agent
-    print("\n" + "-" * 40)
-    print("[ReAct Agent with Tools]")
-    print("-" * 40)
-    try:
-        react_result = run_react_agent(
-            query=query,
-            labs=labs,
-            medications=medications,
-            symptoms=symptoms,
-        )
-        print(f"Tools used: {react_result.tools_used}")
-        print(f"Analysis:\n{react_result.analysis[:500]}...")
-    except Exception as e:
-        print(f"Error: {e}")
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+    structuring_prompt = f"""Convert the following lab analysis into a structured format.
+
+ORIGINAL QUERY: {case.query}
+
+LAB VALUES:
+{json.dumps(labs, indent=2)}
+
+SYMPTOMS: {', '.join(case.symptoms) if case.symptoms else 'None reported'}
+
+ANALYSIS TO STRUCTURE:
+{react_result.analysis}
+
+Convert this into the required JSON format with:
+- summary: 2-3 sentence overview
+- key_insights: array of marker analyses
+- recommended_topics_for_doctor: array of discussion points
+- lifestyle_considerations: array of wellness suggestions
+- safety_notes: array with at least one non_diagnostic note
+
+For each key_insight, determine:
+- status: "high", "low", "normal", or "borderline"
+- trend: "increasing", "decreasing", "stable", or "unknown"
+- Provide clinical_relevance and action"""
+
+    response = client.beta.chat.completions.parse(
+        model=model,
+        messages=[
+            {"role": "system", "content": "You convert health analyses into structured JSON format. Always include safety disclaimers."},
+            {"role": "user", "content": structuring_prompt},
+        ],
+        response_format=LabInsightsSummary,
+    )
+
+    structured_output = response.choices[0].message.parsed
+
+    # Ensure we have at least one safety note
+    if not structured_output.safety_notes:
+        structured_output.safety_notes = [
+            SafetyNote(
+                message="This information is for educational purposes only and is not a substitute for professional medical advice. Please consult your healthcare provider.",
+                type="non_diagnostic"
+            )
+        ]
+
+    return ReActEvalResult(
+        output=structured_output,
+        input_tokens=response.usage.prompt_tokens,
+        output_tokens=response.usage.completion_tokens,
+        tools_used=react_result.tools_used,
+        reasoning_steps=react_result.reasoning_steps,
+    )
 
 
 # ---------------------------------------------------------------------------

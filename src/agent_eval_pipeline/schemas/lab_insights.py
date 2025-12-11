@@ -144,25 +144,4 @@ class LabInsightsSummary(BaseModel):
     # MUST include at least one non_diagnostic note
     # The eval can check for this
 
-
-# ---------------------------------------------------------------------------
-# LEARNING EXERCISE: Try breaking the schema
-# ---------------------------------------------------------------------------
-#
-# Uncomment and run this to see validation in action:
-#
-# if __name__ == "__main__":
-#     # This WILL fail - "elevated" is not a valid status
-#     bad_insight = MarkerInsight(
-#         marker="TSH",
-#         status="elevated",  # Invalid! Must be high/low/normal/borderline
-#         value=5.5,
-#         unit="mIU/L",
-#         ref_range="0.4-4.0",
-#         trend="rising",  # Invalid! Must be increasing/decreasing/stable/unknown
-#         clinical_relevance="High TSH indicates underactive thyroid",
-#         action="See your doctor"
-#     )
-#
-# The error message will show exactly which field failed and why.
 # This is what the schema eval does on every golden case.

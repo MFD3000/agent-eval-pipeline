@@ -8,12 +8,7 @@ Each command follows a consistent pattern:
 4. Print results
 5. Return exit code
 
-INTERVIEW TALKING POINT:
-------------------------
-"CLI commands are thin wrappers around the evaluation functions.
-They handle argument parsing and output formatting, but delegate
-the actual work to the elevated modules. This keeps the CLI simple
-and the business logic testable."
+
 """
 
 from __future__ import annotations

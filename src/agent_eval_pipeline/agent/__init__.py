@@ -1,5 +1,5 @@
 """
-Agent module - provides both legacy and LangGraph-based agents.
+Agent module - provides LangGraph and DSPy ReAct agent implementations.
 
 ELEVATED ARCHITECTURE:
 ----------------------
@@ -9,21 +9,25 @@ The agent module follows hexagonal architecture with:
 - Graph construction in graph.py
 - Public API in langgraph_runner.py
 
-The unified interface (run_agent) can use either implementation,
-selected via environment variable or explicit parameter.
+AVAILABLE AGENTS:
+-----------------
+1. LangGraph Agent (default): RAG-enabled state machine with retrieval
+2. DSPy ReAct Agent: Tool-using agent with explicit reasoning traces
+
+The unified interface (run_agent) selects implementation via AGENT_TYPE env var.
 
 INTERVIEW TALKING POINT:
 ------------------------
-"The agent module provides a unified interface that abstracts whether
-we're using the LangGraph implementation or the legacy OpenAI agent.
-The LangGraph version has injectable dependencies for testing - I can
-swap in a mock vector store and mock LLM to test the entire flow
-in under 100ms without any API calls."
+"The agent module provides a unified interface that abstracts the implementation.
+LangGraph gives us a state machine with RAG retrieval. DSPy ReAct gives us
+tool-using capabilities with explicit reasoning. Both produce the same
+LabInsightsSummary output, enabling fair comparison in evals."
 """
 
 import os
+import time
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, Literal
 
 from agent_eval_pipeline.schemas.lab_insights import LabInsightsSummary
 from agent_eval_pipeline.golden_sets.thyroid_cases import GoldenCase
@@ -63,9 +67,13 @@ class AgentResult:
     output_tokens: int
     total_tokens: int
     model: str
+    agent_type: str  # "langgraph" or "dspy_react"
     # LangGraph-specific (optional)
     retrieved_docs: list[dict] | None = None
     retrieval_latency_ms: float | None = None
+    # DSPy ReAct-specific (optional)
+    tools_used: list[str] | None = None
+    reasoning_steps: int | None = None
 
 
 @dataclass
@@ -79,6 +87,9 @@ class AgentError:
 # ---------------------------------------------------------------------------
 # AGENT INTERFACE
 # ---------------------------------------------------------------------------
+
+
+AgentType = Literal["langgraph", "dspy_react"]
 
 
 class Agent(Protocol):
@@ -96,7 +107,7 @@ class Agent(Protocol):
 
 def run_agent(
     case: GoldenCase,
-    use_langgraph: bool | None = None,
+    agent_type: AgentType | None = None,
 ) -> AgentResult | AgentError:
     """
     Run the agent on a golden case.
@@ -106,21 +117,24 @@ def run_agent(
 
     Args:
         case: The golden case to run
-        use_langgraph: Force LangGraph (True) or legacy (False).
-                       If None, uses AGENT_TYPE env var (default: langgraph)
+        agent_type: "langgraph" or "dspy_react".
+                    If None, uses AGENT_TYPE env var (default: langgraph)
 
     Returns:
         AgentResult on success, AgentError on failure
     """
-    if use_langgraph is None:
-        use_langgraph = (
-            os.environ.get("AGENT_TYPE", "langgraph").lower() == "langgraph"
-        )
+    if agent_type is None:
+        agent_type = os.environ.get("AGENT_TYPE", "langgraph").lower()
 
-    if use_langgraph:
+    if agent_type == "langgraph":
         return _run_langgraph_agent(case)
+    elif agent_type == "dspy_react":
+        return _run_dspy_react_agent(case)
     else:
-        return _run_legacy_agent(case)
+        return AgentError(
+            error_type="InvalidAgentType",
+            error_message=f"Unknown agent type: {agent_type}. Use 'langgraph' or 'dspy_react'",
+        )
 
 
 def _run_langgraph_agent(case: GoldenCase) -> AgentResult | AgentError:
@@ -140,35 +154,37 @@ def _run_langgraph_agent(case: GoldenCase) -> AgentResult | AgentError:
         output_tokens=result.output_tokens,
         total_tokens=result.input_tokens + result.output_tokens,
         model=os.environ.get("AGENT_MODEL", "gpt-4o-mini"),
+        agent_type="langgraph",
         retrieved_docs=result.retrieved_docs,
         retrieval_latency_ms=result.retrieval_latency_ms,
     )
 
 
-def _run_legacy_agent(case: GoldenCase) -> AgentResult | AgentError:
-    """Run the legacy OpenAI-based agent."""
-    from agent_eval_pipeline.agent.lab_insights_agent import (
-        run_agent as legacy_run_agent,
-        AgentResult as LegacyResult,
-        AgentError as LegacyError,
-    )
+def _run_dspy_react_agent(case: GoldenCase) -> AgentResult | AgentError:
+    """Run the DSPy ReAct agent with tool use."""
+    from agent_eval_pipeline.agent.dspy_react_agent import run_react_agent_for_eval
 
-    result = legacy_run_agent(case)
+    start = time.time()
+    try:
+        result = run_react_agent_for_eval(case)
+        latency_ms = (time.time() - start) * 1000
 
-    if isinstance(result, LegacyError):
-        return AgentError(
-            error_type=result.error_type,
-            error_message=result.error_message,
+        return AgentResult(
+            output=result.output,
+            latency_ms=latency_ms,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            total_tokens=result.input_tokens + result.output_tokens,
+            model=os.environ.get("AGENT_MODEL", "gpt-4o-mini"),
+            agent_type="dspy_react",
+            tools_used=result.tools_used,
+            reasoning_steps=result.reasoning_steps,
         )
-
-    return AgentResult(
-        output=result.output,
-        latency_ms=result.latency_ms,
-        input_tokens=result.input_tokens,
-        output_tokens=result.output_tokens,
-        total_tokens=result.total_tokens,
-        model=result.model,
-    )
+    except Exception as e:
+        return AgentError(
+            error_type=type(e).__name__,
+            error_message=str(e),
+        )
 
 
 __all__ = [
@@ -176,6 +192,7 @@ __all__ = [
     "AgentResult",
     "AgentError",
     "Agent",
+    "AgentType",
     "run_agent",
     # State
     "AgentState",

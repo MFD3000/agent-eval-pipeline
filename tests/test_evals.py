@@ -210,7 +210,7 @@ class TestIntegration:
     )
     def test_agent_runs(self):
         """Agent should produce valid output."""
-        from agent_eval_pipeline.agent.lab_insights_agent import run_agent, AgentResult
+        from agent_eval_pipeline.agent import run_agent, AgentResult
 
         case = get_case_by_id("thyroid-001")
         result = run_agent(case)

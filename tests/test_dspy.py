@@ -1,23 +1,21 @@
 """
 DSPy Integration Tests
 
-These tests demonstrate DSPy patterns and verify our DSPy modules work correctly.
-They're designed to run WITHOUT API calls using DSPy's DummyLM.
+These tests demonstrate DSPy patterns and verify our DSPy ReAct agent works correctly.
+They're designed to run WITHOUT API calls where possible.
 
 INTERVIEW TALKING POINT:
 ------------------------
-"I wrote tests for our DSPy modules using DummyLM, which returns
-predefined responses. This lets me verify the module composition
-and data flow without making API calls. For integration tests with
-real LLMs, I use a small test budget and cache responses."
+"I wrote tests for our DSPy ReAct agent that verify tool functions work,
+module structure is correct, and the agent produces expected outputs.
+Integration tests with real LLMs are marked to skip without an API key."
 
 TEST PATTERNS DEMONSTRATED:
 --------------------------
-1. Using DummyLM for deterministic testing
-2. Testing signature field extraction
-3. Testing module composition
-4. Testing the optimization pipeline
-5. Verifying assertion behavior
+1. Testing tool functions in isolation
+2. Testing module composition
+3. Testing DSPy judge signatures
+4. Integration tests with real LLM (skipped without API key)
 """
 
 import pytest
@@ -27,15 +25,6 @@ import dspy
 # ---------------------------------------------------------------------------
 # FIXTURES
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def dummy_lm():
-    """Create a DummyLM that returns predefined responses."""
-    # DummyLM returns the same response for any input
-    # This is perfect for testing module structure
-    lm = dspy.LM("openai/gpt-4o-mini", api_key="dummy")
-    return lm
 
 
 @pytest.fixture
@@ -80,38 +69,20 @@ def sample_history():
 class TestSignatures:
     """Test DSPy signature definitions."""
 
-    def test_analyze_labs_signature_fields(self):
-        """Verify AnalyzeLabs signature has correct fields."""
-        from agent_eval_pipeline.agent.dspy_agent import AnalyzeLabs
+    def test_react_signature_fields(self):
+        """Verify LabAnalysisSignature has correct fields."""
+        from agent_eval_pipeline.agent.dspy_react_agent import LabAnalysisSignature
 
-        sig = AnalyzeLabs
+        sig = LabAnalysisSignature
 
         # Check input fields
         assert "query" in sig.input_fields
         assert "labs" in sig.input_fields
-        assert "history" in sig.input_fields
+        assert "medications" in sig.input_fields
         assert "symptoms" in sig.input_fields
-        assert "context" in sig.input_fields
 
         # Check output fields
-        assert "summary" in sig.output_fields
-        assert "insights_json" in sig.output_fields
-        assert "doctor_topics" in sig.output_fields
-        assert "lifestyle" in sig.output_fields
-
-    def test_safety_check_signature_fields(self):
-        """Verify SafetyCheck signature has boolean output."""
-        from agent_eval_pipeline.agent.dspy_agent import SafetyCheck
-
-        sig = SafetyCheck
-
-        # Check input
-        assert "content" in sig.input_fields
-
-        # Check outputs
-        assert "is_safe" in sig.output_fields
-        assert "issues" in sig.output_fields
-        assert "disclaimer" in sig.output_fields
+        assert "analysis" in sig.output_fields
 
     def test_judge_signature_fields(self):
         """Verify judge signatures have score outputs."""
@@ -137,20 +108,6 @@ class TestSignatures:
 class TestModuleStructure:
     """Test DSPy module composition."""
 
-    def test_lab_insights_module_has_predictors(self):
-        """Verify LabInsightsModule has expected predictors."""
-        from agent_eval_pipeline.agent.dspy_agent import LabInsightsModule
-
-        module = LabInsightsModule()
-
-        # Check module has expected components
-        assert hasattr(module, "extract_markers")
-        assert hasattr(module, "analyze")
-        assert hasattr(module, "safety_check")
-
-        # Analyze should be ChainOfThought (has reasoning)
-        assert isinstance(module.analyze, dspy.ChainOfThought)
-
     def test_dspy_judge_module_has_evaluators(self):
         """Verify DSPyJudge has all dimension evaluators."""
         from agent_eval_pipeline.evals.judge.dspy_judge import DSPyJudge
@@ -167,17 +124,6 @@ class TestModuleStructure:
         assert isinstance(judge.clinical, dspy.ChainOfThought)
         assert isinstance(judge.safety, dspy.ChainOfThought)
 
-    def test_module_can_be_deepcopied(self):
-        """Modules should support deepcopy for optimization."""
-        from agent_eval_pipeline.agent.dspy_agent import LabInsightsModule
-
-        module = LabInsightsModule()
-        copied = module.deepcopy()
-
-        # Should be a separate instance
-        assert copied is not module
-        assert copied.analyze is not module.analyze
-
 
 # ---------------------------------------------------------------------------
 # DATA CONVERSION TESTS
@@ -187,69 +133,11 @@ class TestModuleStructure:
 class TestDataConversion:
     """Test conversion between DSPy and our schemas."""
 
-    def test_golden_case_to_trainset(self):
-        """Test converting golden cases to DSPy examples."""
-        from agent_eval_pipeline.agent.dspy_agent import golden_cases_to_trainset
-        from agent_eval_pipeline.golden_sets.thyroid_cases import get_all_golden_cases
-
-        cases = get_all_golden_cases()[:2]  # Just test with 2
-        trainset = golden_cases_to_trainset(cases)
-
-        assert len(trainset) == 2
-        assert isinstance(trainset[0], dspy.Example)
-
-        # Check example has expected fields
-        example = trainset[0]
-        assert hasattr(example, "query")
-        assert hasattr(example, "labs")
-        assert hasattr(example, "expected_points")
-
-    def test_parse_dspy_result_handles_valid_json(self):
-        """Test parsing DSPy prediction with valid JSON."""
-        from agent_eval_pipeline.agent.dspy_agent import parse_dspy_result
-
-        # Create mock prediction
-        prediction = dspy.Prediction(
-            summary="TSH is elevated, suggesting thyroid monitoring needed.",
-            insights_json='[{"marker": "TSH", "status": "high", "value": 5.5, "unit": "mIU/L", "ref_range": "0.4-4.0", "trend": "increasing", "clinical_relevance": "May indicate thyroid dysfunction", "action": "Discuss with doctor"}]',
-            doctor_topics="TSH levels, thyroid function",
-            lifestyle="Manage stress, adequate sleep",
-            reasoning="The TSH value of 5.5 exceeds the reference range...",
-            safety_disclaimer="This is for educational purposes only.",
-            markers_extracted=["TSH"],
-        )
-
-        result = parse_dspy_result(prediction)
-
-        assert result.output.summary == prediction.summary
-        assert len(result.output.key_insights) == 1
-        assert result.output.key_insights[0].marker == "TSH"
-        assert result.reasoning == prediction.reasoning
-
-    def test_parse_dspy_result_handles_invalid_json(self):
-        """Test graceful handling of malformed JSON."""
-        from agent_eval_pipeline.agent.dspy_agent import parse_dspy_result
-
-        prediction = dspy.Prediction(
-            summary="Test summary",
-            insights_json="not valid json",  # Invalid
-            doctor_topics="topic1, topic2",
-            lifestyle="lifestyle1",
-            reasoning="test reasoning",
-            safety_disclaimer="disclaimer",
-            markers_extracted=["TSH"],
-        )
-
-        # Should not raise, should return empty insights
-        result = parse_dspy_result(prediction)
-        assert len(result.output.key_insights) == 0
-
     def test_judge_output_conversion(self):
         """Test converting DSPy judge prediction to JudgeOutput."""
         from agent_eval_pipeline.evals.judge.dspy_judge import (
             dspy_prediction_to_judge_output,
         )
-        from agent_eval_pipeline.evals.judge.schemas import WEIGHTS
 
         prediction = dspy.Prediction(
             scores={
@@ -274,47 +162,6 @@ class TestDataConversion:
         assert output.safety_compliance.score == 5.0
         assert output.clinical_correctness.reasoning == "Accurate interpretation"
         assert len(output.critical_issues) == 0
-
-
-# ---------------------------------------------------------------------------
-# HELPER FUNCTION TESTS
-# ---------------------------------------------------------------------------
-
-
-class TestHelperFunctions:
-    """Test utility functions."""
-
-    def test_format_labs(self, sample_labs):
-        """Test lab formatting for prompts."""
-        from agent_eval_pipeline.agent.dspy_agent import LabInsightsModule
-
-        module = LabInsightsModule()
-        formatted = module._format_labs(sample_labs)
-
-        assert "TSH" in formatted
-        assert "5.5" in formatted
-        assert "mIU/L" in formatted
-        assert "0.4-4.0" in formatted
-
-    def test_format_history(self, sample_history):
-        """Test history formatting."""
-        from agent_eval_pipeline.agent.dspy_agent import LabInsightsModule
-
-        module = LabInsightsModule()
-        formatted = module._format_history(sample_history)
-
-        assert "TSH" in formatted
-        assert "4.2" in formatted
-        assert "2024-06-01" in formatted
-
-    def test_format_empty_history(self):
-        """Test handling empty history."""
-        from agent_eval_pipeline.agent.dspy_agent import LabInsightsModule
-
-        module = LabInsightsModule()
-        formatted = module._format_history([])
-
-        assert "No historical data" in formatted
 
 
 # ---------------------------------------------------------------------------
@@ -398,7 +245,7 @@ class TestOptimizationInfrastructure:
 
 
 # ---------------------------------------------------------------------------
-# INTEGRATION TEST (SKIPPED WITHOUT API KEY)
+# REACT AGENT TESTS
 # ---------------------------------------------------------------------------
 
 
@@ -453,6 +300,11 @@ class TestReActAgent:
         assert "5.5" in formatted
 
 
+# ---------------------------------------------------------------------------
+# INTEGRATION TESTS (SKIPPED WITHOUT API KEY)
+# ---------------------------------------------------------------------------
+
+
 class TestIntegration:
     """Integration tests requiring API key."""
 
@@ -460,19 +312,18 @@ class TestIntegration:
         not pytest.importorskip("os").environ.get("OPENAI_API_KEY"),
         reason="OPENAI_API_KEY not set",
     )
-    def test_dspy_agent_produces_output(self, sample_labs):
-        """Test DSPy agent produces valid output."""
-        from agent_eval_pipeline.agent.dspy_agent import run_dspy_agent
+    def test_react_agent_produces_output(self, sample_labs):
+        """Test ReAct agent produces valid output."""
+        from agent_eval_pipeline.agent.dspy_react_agent import run_react_agent
 
-        result = run_dspy_agent(
+        result = run_react_agent(
             query="What do my thyroid results mean?",
             labs=sample_labs,
             symptoms=["fatigue"],
         )
 
-        assert result.output is not None
-        assert len(result.output.summary) > 0
-        assert result.reasoning is not None
+        assert result.analysis is not None
+        assert len(result.analysis) > 0
 
     @pytest.mark.skipif(
         not pytest.importorskip("os").environ.get("OPENAI_API_KEY"),

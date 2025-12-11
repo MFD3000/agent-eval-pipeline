@@ -30,13 +30,11 @@ CI INTEGRATION:
 - Exit code 1 = one or more gates failed
 - Structured JSON output for CI parsing
 
-INTERVIEW TALKING POINT:
-------------------------
-"The eval harness runs gates in order of cost: schema validation first
+The eval harness runs gates in order of cost: schema validation first
 because it's instant, then retrieval, then LLM-as-judge which is expensive.
 If early gates fail, we skip later ones to save compute. The harness produces
 structured reports that CI can parse to show inline PR comments with
-exactly what failed and why."
+exactly what failed and why.
 """
 
 import json
