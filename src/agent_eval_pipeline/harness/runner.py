@@ -40,12 +40,21 @@ exactly what failed and why.
 import json
 import sys
 import time
+import uuid
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from enum import Enum
 from typing import Any
 
 from agent_eval_pipeline.golden_sets.thyroid_cases import get_all_golden_cases
+from agent_eval_pipeline.observability import (
+    init_phoenix,
+    get_tracer,
+    EVAL_HARNESS_RUN_ID,
+    EVAL_GATE_NAME,
+    EVAL_GATE_STATUS,
+    eval_gate_attributes,
+)
 from agent_eval_pipeline.evals.schema_eval import run_schema_eval, SchemaEvalReport
 from agent_eval_pipeline.evals.retrieval_eval import run_retrieval_eval, RetrievalEvalReport
 from agent_eval_pipeline.evals.judge_eval import run_judge_eval, JudgeEvalReport
@@ -110,6 +119,8 @@ def run_gate(
     Returns:
         Tuple of (GateResult, raw_report)
     """
+    tracer = get_tracer()
+
     if skip:
         return GateResult(
             name=name,
@@ -124,51 +135,66 @@ def run_gate(
         print(f"{'='*60}")
 
     start = time.time()
-    try:
-        report = runner()
-        duration_ms = (time.time() - start) * 1000
 
-        # Determine pass/fail based on report type
-        if hasattr(report, 'all_passed'):
-            passed = report.all_passed
-        elif hasattr(report, 'passed'):
-            passed = report.passed
-        else:
-            passed = True  # Default to passed if unknown
+    # Create span for this gate
+    gate_attrs = {EVAL_GATE_NAME: name}
+    with tracer.start_span(f"eval_gate.{name.lower().replace(' ', '_')}", attributes=gate_attrs) as span:
+        try:
+            report = runner()
+            duration_ms = (time.time() - start) * 1000
 
-        status = GateStatus.PASSED if passed else GateStatus.FAILED
+            # Determine pass/fail based on report type
+            if hasattr(report, 'all_passed'):
+                passed = report.all_passed
+            elif hasattr(report, 'passed'):
+                passed = report.passed
+            else:
+                passed = True  # Default to passed if unknown
 
-        # Generate summary
-        if hasattr(report, 'pass_rate'):
-            summary = f"Pass rate: {report.pass_rate:.1%}"
-        elif hasattr(report, 'avg_score'):
-            summary = f"Avg score: {report.avg_score:.2f}/5"
-        elif hasattr(report, 'avg_f1'):
-            summary = f"Avg F1: {report.avg_f1:.2f}"
-        else:
-            summary = "Completed"
+            status = GateStatus.PASSED if passed else GateStatus.FAILED
 
-        if verbose:
-            print(f"\n>>> {name}: {'PASSED' if passed else 'FAILED'} ({summary})")
+            # Generate summary
+            if hasattr(report, 'pass_rate'):
+                summary = f"Pass rate: {report.pass_rate:.1%}"
+                span.set_attribute("eval.gate.pass_rate", report.pass_rate)
+            elif hasattr(report, 'avg_score'):
+                summary = f"Avg score: {report.avg_score:.2f}/5"
+                span.set_attribute("eval.gate.avg_score", report.avg_score)
+            elif hasattr(report, 'avg_f1'):
+                summary = f"Avg F1: {report.avg_f1:.2f}"
+                span.set_attribute("eval.gate.avg_f1", report.avg_f1)
+            else:
+                summary = "Completed"
 
-        return GateResult(
-            name=name,
-            status=status,
-            duration_ms=duration_ms,
-            summary=summary,
-        ), report
+            # Update span with results
+            span.set_attribute(EVAL_GATE_STATUS, status.value)
+            span.set_status("ok" if passed else "error", summary)
 
-    except Exception as e:
-        duration_ms = (time.time() - start) * 1000
-        if verbose:
-            print(f"\n>>> {name}: ERROR - {e}")
+            if verbose:
+                print(f"\n>>> {name}: {'PASSED' if passed else 'FAILED'} ({summary})")
 
-        return GateResult(
-            name=name,
-            status=GateStatus.ERROR,
-            duration_ms=duration_ms,
-            summary=f"Error: {str(e)[:100]}",
-        ), None
+            return GateResult(
+                name=name,
+                status=status,
+                duration_ms=duration_ms,
+                summary=summary,
+            ), report
+
+        except Exception as e:
+            duration_ms = (time.time() - start) * 1000
+            span.set_attribute(EVAL_GATE_STATUS, "error")
+            span.record_exception(e)
+            span.set_status("error", str(e))
+
+            if verbose:
+                print(f"\n>>> {name}: ERROR - {e}")
+
+            return GateResult(
+                name=name,
+                status=GateStatus.ERROR,
+                duration_ms=duration_ms,
+                summary=f"Error: {str(e)[:100]}",
+            ), None
 
 
 def run_all_evals(
@@ -187,73 +213,91 @@ def run_all_evals(
     Returns:
         HarnessReport with all results
     """
-    start_time = time.time()
-    gates: list[GateResult] = []
-    has_failure = False
+    tracer = get_tracer()
+    run_id = str(uuid.uuid4())
 
-    # Gate 1: Schema Eval
-    schema_result, _ = run_gate(
-        name="Schema Validation",
-        runner=run_schema_eval,
-        skip=False,
-        verbose=verbose,
-    )
-    gates.append(schema_result)
-    if schema_result.status != GateStatus.PASSED:
-        has_failure = True
+    # Create root span for entire eval run
+    root_attrs = {
+        EVAL_HARNESS_RUN_ID: run_id,
+        "eval.harness.fail_fast": fail_fast,
+        "eval.harness.skip_expensive": skip_expensive,
+    }
 
-    # Gate 2: Retrieval Eval
-    retrieval_result, _ = run_gate(
-        name="Retrieval Quality",
-        runner=run_retrieval_eval,
-        skip=fail_fast and has_failure,
-        verbose=verbose,
-    )
-    gates.append(retrieval_result)
-    if retrieval_result.status == GateStatus.FAILED:
-        has_failure = True
+    with tracer.start_span("eval_harness_run", attributes=root_attrs) as root_span:
+        start_time = time.time()
+        gates: list[GateResult] = []
+        has_failure = False
 
-    # Gate 3: Judge Eval (expensive)
-    judge_result, _ = run_gate(
-        name="LLM-as-Judge",
-        runner=run_judge_eval,
-        skip=(fail_fast and has_failure) or skip_expensive,
-        verbose=verbose,
-    )
-    gates.append(judge_result)
-    if judge_result.status == GateStatus.FAILED:
-        has_failure = True
+        # Gate 1: Schema Eval
+        schema_result, _ = run_gate(
+            name="Schema Validation",
+            runner=run_schema_eval,
+            skip=False,
+            verbose=verbose,
+        )
+        gates.append(schema_result)
+        if schema_result.status != GateStatus.PASSED:
+            has_failure = True
 
-    # Gate 4: Performance Eval
-    perf_result, _ = run_gate(
-        name="Performance Regression",
-        runner=run_perf_eval,
-        skip=fail_fast and has_failure,
-        verbose=verbose,
-    )
-    gates.append(perf_result)
-    if perf_result.status == GateStatus.FAILED:
-        has_failure = True
+        # Gate 2: Retrieval Eval
+        retrieval_result, _ = run_gate(
+            name="Retrieval Quality",
+            runner=run_retrieval_eval,
+            skip=fail_fast and has_failure,
+            verbose=verbose,
+        )
+        gates.append(retrieval_result)
+        if retrieval_result.status == GateStatus.FAILED:
+            has_failure = True
 
-    # Calculate totals
-    total_duration = (time.time() - start_time) * 1000
-    all_passed = all(
-        g.status in (GateStatus.PASSED, GateStatus.SKIPPED)
-        for g in gates
-    )
+        # Gate 3: Judge Eval (expensive)
+        judge_result, _ = run_gate(
+            name="LLM-as-Judge",
+            runner=run_judge_eval,
+            skip=(fail_fast and has_failure) or skip_expensive,
+            verbose=verbose,
+        )
+        gates.append(judge_result)
+        if judge_result.status == GateStatus.FAILED:
+            has_failure = True
 
-    # Generate summary
-    passed_count = sum(1 for g in gates if g.status == GateStatus.PASSED)
-    failed_count = sum(1 for g in gates if g.status == GateStatus.FAILED)
-    summary = f"{passed_count} passed, {failed_count} failed"
+        # Gate 4: Performance Eval
+        perf_result, _ = run_gate(
+            name="Performance Regression",
+            runner=run_perf_eval,
+            skip=fail_fast and has_failure,
+            verbose=verbose,
+        )
+        gates.append(perf_result)
+        if perf_result.status == GateStatus.FAILED:
+            has_failure = True
 
-    return HarnessReport(
-        timestamp=datetime.now().isoformat(),
-        total_duration_ms=total_duration,
-        all_passed=all_passed,
-        gates=gates,
-        summary=summary,
-    )
+        # Calculate totals
+        total_duration = (time.time() - start_time) * 1000
+        all_passed = all(
+            g.status in (GateStatus.PASSED, GateStatus.SKIPPED)
+            for g in gates
+        )
+
+        # Generate summary
+        passed_count = sum(1 for g in gates if g.status == GateStatus.PASSED)
+        failed_count = sum(1 for g in gates if g.status == GateStatus.FAILED)
+        summary = f"{passed_count} passed, {failed_count} failed"
+
+        # Update root span with final results
+        root_span.set_attribute("eval.harness.all_passed", all_passed)
+        root_span.set_attribute("eval.harness.passed_count", passed_count)
+        root_span.set_attribute("eval.harness.failed_count", failed_count)
+        root_span.set_attribute("eval.harness.duration_ms", total_duration)
+        root_span.set_status("ok" if all_passed else "error", summary)
+
+        return HarnessReport(
+            timestamp=datetime.now().isoformat(),
+            total_duration_ms=total_duration,
+            all_passed=all_passed,
+            gates=gates,
+            summary=summary,
+        )
 
 
 def print_report(report: HarnessReport) -> None:
@@ -291,6 +335,9 @@ def main():
     import argparse
     from dotenv import load_dotenv
     load_dotenv()
+
+    # Initialize Phoenix observability (if enabled)
+    init_phoenix()
 
     parser = argparse.ArgumentParser(description="Run evaluation gates")
     parser.add_argument(

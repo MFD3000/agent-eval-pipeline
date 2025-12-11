@@ -24,6 +24,7 @@ to the same problem."
 import os
 import time
 import json
+import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from typing import Literal
@@ -31,6 +32,14 @@ from typing import Literal
 from agent_eval_pipeline.golden_sets.thyroid_cases import GoldenCase, get_all_golden_cases
 from agent_eval_pipeline.agent import run_agent, AgentResult, AgentError, AgentType
 from agent_eval_pipeline.evals.schema_eval import validate_case_output
+from agent_eval_pipeline.observability import (
+    init_phoenix,
+    get_tracer,
+    EVAL_HARNESS_RUN_ID,
+    EVAL_CASE_ID,
+    AGENT_TYPE,
+    agent_run_attributes,
+)
 
 
 @dataclass
@@ -108,38 +117,67 @@ def run_agent_on_case(
     agent_type: AgentType,
 ) -> AgentCaseResult:
     """Run a single agent on a single case."""
-    result = run_agent(case, agent_type=agent_type)
+    tracer = get_tracer()
 
-    if isinstance(result, AgentError):
+    # Create span for this agent run
+    span_attrs = {
+        EVAL_CASE_ID: case.id,
+        AGENT_TYPE: agent_type,
+    }
+
+    with tracer.start_span(f"agent_run.{agent_type}", attributes=span_attrs) as span:
+        result = run_agent(case, agent_type=agent_type)
+
+        if isinstance(result, AgentError):
+            span.set_attribute("agent.success", False)
+            span.set_attribute("agent.error", f"{result.error_type}: {result.error_message}")
+            span.set_status("error", result.error_message)
+            return AgentCaseResult(
+                case_id=case.id,
+                agent_type=agent_type,
+                success=False,
+                error=f"{result.error_type}: {result.error_message}",
+            )
+
+        # Validate schema
+        schema_result = validate_case_output(case, result.output)
+        schema_errors = []
+        if schema_result.error:
+            schema_errors.append(schema_result.error)
+        if schema_result.invalid_values:
+            schema_errors.extend([f"{k}: {v}" for k, v in schema_result.invalid_values.items()])
+
+        # Update span with agent metrics
+        span.set_attribute("agent.success", True)
+        span.set_attribute("agent.latency_ms", result.latency_ms)
+        span.set_attribute("agent.input_tokens", result.input_tokens)
+        span.set_attribute("agent.output_tokens", result.output_tokens)
+        span.set_attribute("agent.total_tokens", result.total_tokens)
+        span.set_attribute("agent.schema_passed", schema_result.passed)
+
+        if result.tools_used:
+            span.set_attribute("agent.tools_used", ",".join(result.tools_used))
+        if result.reasoning_steps:
+            span.set_attribute("agent.reasoning_steps", result.reasoning_steps)
+        if result.retrieved_docs:
+            span.set_attribute("agent.retrieved_doc_count", len(result.retrieved_docs))
+
+        span.set_status("ok" if schema_result.passed else "error")
+
         return AgentCaseResult(
             case_id=case.id,
             agent_type=agent_type,
-            success=False,
-            error=f"{result.error_type}: {result.error_message}",
+            success=True,
+            latency_ms=result.latency_ms,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            total_tokens=result.total_tokens,
+            schema_passed=schema_result.passed,
+            schema_errors=schema_errors if schema_errors else None,
+            tools_used=result.tools_used,
+            reasoning_steps=result.reasoning_steps,
+            retrieved_docs=result.retrieved_docs,
         )
-
-    # Validate schema
-    schema_result = validate_case_output(case, result.output)
-    schema_errors = []
-    if schema_result.error:
-        schema_errors.append(schema_result.error)
-    if schema_result.invalid_values:
-        schema_errors.extend([f"{k}: {v}" for k, v in schema_result.invalid_values.items()])
-
-    return AgentCaseResult(
-        case_id=case.id,
-        agent_type=agent_type,
-        success=True,
-        latency_ms=result.latency_ms,
-        input_tokens=result.input_tokens,
-        output_tokens=result.output_tokens,
-        total_tokens=result.total_tokens,
-        schema_passed=schema_result.passed,
-        schema_errors=schema_errors if schema_errors else None,
-        tools_used=result.tools_used,
-        reasoning_steps=result.reasoning_steps,
-        retrieved_docs=result.retrieved_docs,
-    )
 
 
 def calculate_summary(
@@ -244,56 +282,80 @@ def run_comparative_eval(
     Returns:
         ComparativeReport with full comparison data
     """
+    tracer = get_tracer()
+    run_id = str(uuid.uuid4())
     cases = cases or get_all_golden_cases()
-    all_results: list[AgentCaseResult] = []
 
-    if verbose:
-        print("=" * 60)
-        print("COMPARATIVE EVALUATION")
-        print("=" * 60)
-        print(f"Agents: {', '.join(agents)}")
-        print(f"Cases: {len(cases)}")
-        print("=" * 60)
+    # Root span for comparative eval
+    root_attrs = {
+        EVAL_HARNESS_RUN_ID: run_id,
+        "eval.comparative.agents": ",".join(agents),
+        "eval.comparative.cases_count": len(cases),
+    }
 
-    for agent_type in agents:
+    with tracer.start_span("comparative_eval_run", attributes=root_attrs) as root_span:
+        all_results: list[AgentCaseResult] = []
+
         if verbose:
-            print(f"\n>>> Running {agent_type} agent...")
+            print("=" * 60)
+            print("COMPARATIVE EVALUATION")
+            print("=" * 60)
+            print(f"Agents: {', '.join(agents)}")
+            print(f"Cases: {len(cases)}")
+            print("=" * 60)
 
-        for case in cases:
+        for agent_type in agents:
             if verbose:
-                print(f"  {case.id}...", end=" ", flush=True)
+                print(f"\n>>> Running {agent_type} agent...")
 
-            result = run_agent_on_case(case, agent_type)
-            all_results.append(result)
+            # Span for each agent's batch of cases
+            agent_attrs = {AGENT_TYPE: agent_type}
+            with tracer.start_span(f"comparative_agent.{agent_type}", attributes=agent_attrs) as agent_span:
+                for case in cases:
+                    if verbose:
+                        print(f"  {case.id}...", end=" ", flush=True)
 
-            if verbose:
-                status = "✓" if result.success and result.schema_passed else "✗"
-                latency = f"{result.latency_ms:.0f}ms" if result.latency_ms else "N/A"
-                print(f"{status} ({latency})")
+                    result = run_agent_on_case(case, agent_type)
+                    all_results.append(result)
 
-    # Calculate summaries
-    summaries = {}
-    for agent_type in agents:
-        agent_results = [r for r in all_results if r.agent_type == agent_type]
-        summaries[agent_type] = calculate_summary(agent_type, agent_results)
+                    if verbose:
+                        status = "✓" if result.success and result.schema_passed else "✗"
+                        latency = f"{result.latency_ms:.0f}ms" if result.latency_ms else "N/A"
+                        print(f"{status} ({latency})")
 
-    # Determine winner
-    winner, recommendation = determine_winner(summaries)
+                # Update agent span with summary
+                agent_results = [r for r in all_results if r.agent_type == agent_type]
+                success_count = sum(1 for r in agent_results if r.success and r.schema_passed)
+                agent_span.set_attribute("agent.success_count", success_count)
+                agent_span.set_attribute("agent.total_count", len(agent_results))
 
-    report = ComparativeReport(
-        timestamp=datetime.now().isoformat(),
-        cases_evaluated=len(cases),
-        agents=agents,
-        summaries=summaries,
-        case_results=all_results,
-        winner=winner,
-        recommendation=recommendation,
-    )
+        # Calculate summaries
+        summaries = {}
+        for agent_type in agents:
+            agent_results = [r for r in all_results if r.agent_type == agent_type]
+            summaries[agent_type] = calculate_summary(agent_type, agent_results)
 
-    if verbose:
-        print_comparative_report(report)
+        # Determine winner
+        winner, recommendation = determine_winner(summaries)
 
-    return report
+        # Update root span with results
+        root_span.set_attribute("eval.comparative.winner", winner or "tie")
+        root_span.set_attribute("eval.comparative.recommendation", recommendation)
+
+        report = ComparativeReport(
+            timestamp=datetime.now().isoformat(),
+            cases_evaluated=len(cases),
+            agents=agents,
+            summaries=summaries,
+            case_results=all_results,
+            winner=winner,
+            recommendation=recommendation,
+        )
+
+        if verbose:
+            print_comparative_report(report)
+
+        return report
 
 
 def print_comparative_report(report: ComparativeReport) -> None:
@@ -350,6 +412,9 @@ def main():
     import argparse
     from dotenv import load_dotenv
     load_dotenv()
+
+    # Initialize Phoenix observability (if enabled)
+    init_phoenix()
 
     parser = argparse.ArgumentParser(description="Run comparative agent evaluation")
     parser.add_argument(

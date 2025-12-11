@@ -382,8 +382,247 @@ OPENAI_API_KEY=sk-...          # Required for LLM calls
 JUDGE_MODEL=gpt-4o             # Model for LLM-as-judge (default: gpt-4o)
 AGENT_MODEL=gpt-4o-mini        # Model for agent (default: gpt-4o-mini)
 USE_POSTGRES=false             # Use PgVector vs InMemory store
-AGENT_TYPE=langgraph           # Default agent type (langgraph or legacy)
+AGENT_TYPE=langgraph           # Default agent type (langgraph or dspy_react)
+
+# Phoenix Observability (optional)
+PHOENIX_ENABLED=false              # Set to true to enable tracing
+PHOENIX_PROJECT_NAME=agent-eval-pipeline
+PHOENIX_COLLECTOR_ENDPOINT=        # Leave empty for local Phoenix UI
+PHOENIX_CAPTURE_LLM_CONTENT=true   # Log prompts/responses
 ```
+
+## Operator Instructions
+
+This section covers how to run, monitor, and troubleshoot the eval pipeline in production.
+
+### Installation
+
+```bash
+# Basic installation
+pip install -e .
+
+# With observability (Phoenix tracing)
+pip install -e ".[observability]"
+
+# With dev dependencies
+pip install -e ".[dev]"
+
+# All extras
+pip install -e ".[dev,observability]"
+```
+
+### Running the Eval Pipeline
+
+#### Standard Eval Run (All Gates)
+
+```bash
+# Run all 4 gates: Schema → Retrieval → Judge → Performance
+PYTHONPATH=src python -m agent_eval_pipeline.harness.runner
+
+# Skip expensive LLM-as-judge (for quick testing)
+PYTHONPATH=src python -m agent_eval_pipeline.harness.runner --skip-expensive
+
+# Continue running all gates even if one fails
+PYTHONPATH=src python -m agent_eval_pipeline.harness.runner --no-fail-fast
+
+# JSON output for CI/CD parsing
+PYTHONPATH=src python -m agent_eval_pipeline.harness.runner --json --quiet
+```
+
+**Exit codes:**
+- `0` - All gates passed
+- `1` - One or more gates failed
+
+#### Comparative Eval (LangGraph vs DSPy ReAct)
+
+```bash
+# Compare both agents side-by-side
+PYTHONPATH=src python -m agent_eval_pipeline.harness.comparative_runner
+
+# Compare specific agents
+PYTHONPATH=src python -m agent_eval_pipeline.harness.comparative_runner --agents langgraph dspy_react
+
+# JSON output
+PYTHONPATH=src python -m agent_eval_pipeline.harness.comparative_runner --json
+```
+
+**Output includes:**
+- Schema pass rate per agent
+- Latency metrics (avg, p50, p95)
+- Token usage (cost proxy)
+- Winner recommendation
+
+### Observability with Phoenix
+
+Phoenix provides LLM-native tracing with auto-instrumentation for OpenAI, LangChain, and DSPy calls.
+
+#### Local Development (Phoenix UI)
+
+```bash
+# Install observability deps
+pip install -e ".[observability]"
+
+# Enable Phoenix and run eval
+PHOENIX_ENABLED=true PYTHONPATH=src python -m agent_eval_pipeline.harness.runner
+```
+
+Phoenix UI opens automatically at `http://localhost:6006` showing:
+- Full trace hierarchy (harness → gates → agent → LLM calls)
+- Token usage per span
+- Latency breakdown
+- LLM prompts and responses (if `PHOENIX_CAPTURE_LLM_CONTENT=true`)
+
+#### Production (Remote Phoenix/OTLP)
+
+```bash
+# Connect to remote Phoenix instance
+export PHOENIX_ENABLED=true
+export PHOENIX_COLLECTOR_ENDPOINT=https://your-phoenix-instance.com/v1/traces
+export PHOENIX_PROJECT_NAME=prod-eval-pipeline
+
+PYTHONPATH=src python -m agent_eval_pipeline.harness.runner
+```
+
+#### Trace Hierarchy
+
+```
+eval_harness_run                    # Root span
+├── eval_gate.schema_validation     # Gate spans with pass/fail
+├── eval_gate.retrieval_quality
+├── eval_gate.llm-as-judge
+│   └── gen_ai.chat                 # Auto-instrumented LLM calls
+└── eval_gate.performance_regression
+```
+
+**Key attributes on spans:**
+- `eval.harness.run_id` - UUID to correlate all spans in a run
+- `eval.gate.name` - Gate name (e.g., "Schema Validation")
+- `eval.gate.status` - "passed", "failed", or "error"
+- `agent.type` - "langgraph" or "dspy_react"
+- `gen_ai.usage.total_tokens` - Token count per LLM call
+
+### CI/CD Integration
+
+#### GitHub Actions Example
+
+```yaml
+name: Eval Gates
+on: [pull_request]
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run eval pipeline
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          PYTHONPATH=src python -m agent_eval_pipeline.harness.runner --json > eval-report.json
+
+      - name: Upload eval report
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: eval-report.json
+```
+
+#### Parsing JSON Output
+
+```bash
+# Check if all gates passed
+PYTHONPATH=src python -m agent_eval_pipeline.harness.runner --json --quiet | jq '.all_passed'
+
+# Get gate summaries
+PYTHONPATH=src python -m agent_eval_pipeline.harness.runner --json --quiet | jq '.gates[] | {name, status, summary}'
+```
+
+### Troubleshooting
+
+#### Common Issues
+
+**1. Schema Validation Failures**
+```
+[FAIL] Schema Validation: Pass rate: 60.0%
+```
+- Check `expected_marker_statuses` in golden cases match LLM output
+- Review the agent's interpretation of borderline values
+- Update golden cases if LLM interpretation is reasonable
+
+**2. Retrieval Quality Failures**
+```
+[FAIL] Retrieval Quality: Avg F1: 0.51
+```
+- Check `expected_doc_ids` in golden cases are comprehensive
+- Review vector store seeding in `retrieval/seeds/`
+- Verify embeddings are working correctly
+
+**3. LLM-as-Judge Low Scores**
+```
+[FAIL] LLM-as-Judge: Avg score: 3.20/5
+```
+- Review judge output for specific dimension failures
+- Check if agent output includes required safety disclaimers
+- Verify clinical accuracy of responses
+
+**4. Performance Regression**
+```
+[FAIL] Performance Regression: p95 latency exceeded baseline
+```
+- Check for API latency issues
+- Review token usage (more tokens = slower)
+- Run `--update-baseline` if regression is acceptable
+
+#### Debug Mode
+
+```bash
+# Verbose output with full traces
+PYTHONPATH=src python -m agent_eval_pipeline.harness.runner 2>&1 | tee eval.log
+
+# Run single gate for debugging
+PYTHONPATH=src python -m agent_eval_pipeline.evals.schema_eval
+PYTHONPATH=src python -m agent_eval_pipeline.evals.retrieval_eval
+PYTHONPATH=src python -m agent_eval_pipeline.evals.judge_eval
+PYTHONPATH=src python -m agent_eval_pipeline.evals.perf_eval
+```
+
+#### Phoenix Debugging
+
+With Phoenix enabled, you can:
+1. View exact prompts sent to LLMs
+2. See token counts per call
+3. Identify slow spans in the trace
+4. Debug agent reasoning steps
+
+```bash
+# Enable Phoenix with full content capture
+PHOENIX_ENABLED=true PHOENIX_CAPTURE_LLM_CONTENT=true \
+  PYTHONPATH=src python -m agent_eval_pipeline.harness.runner
+```
+
+### Monitoring Recommendations
+
+1. **Track eval pass rates over time** - Detect regressions early
+2. **Monitor p95 latency** - Catch performance degradation
+3. **Alert on safety score drops** - Critical for healthcare domain
+4. **Track token usage** - Cost monitoring
+5. **Compare agent versions** - Use comparative runner for A/B testing
+
+### Scaling Considerations
+
+- **Parallel gate execution**: Currently sequential; can parallelize non-dependent gates
+- **Caching**: Agent results are not cached between gates (room for optimization)
+- **Rate limiting**: No built-in rate limiting; rely on OpenAI client defaults
+- **Batch processing**: Golden cases run sequentially; parallelizable with async
 
 ## Project Structure Details
 
