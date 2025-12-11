@@ -1,0 +1,40 @@
+flowchart TD
+
+%% Ingestion Layer %%
+
+A[User Data Sources: labs, genomics, wellness, wearables] --> B[Consent and Notification Gateway]
+B --> C[Ingestion Services: normalize, validate, stamp lineage]
+C --> D[Unified Health Record Store: immutable log + mutable layer]
+
+%% Feature / ML Layer %%
+
+D --> E[Feature Store: feature policies and provenance]
+
+E --> F1[Identifiable ML Workspace: strict access and minimum necessary]
+E --> F2[De-identified ML Workspace: PETs, aggregation, tokenization]
+E --> F3[Aggregated Analytics Workspace: BI and dashboards]
+
+%% Model Ops %%
+
+F1 --> G[Model Training Pipeline]
+F2 --> G
+F3 --> G
+
+G --> H[Model Registry: model cards and data dependencies]
+H --> I[Serving Layer: insights, trends, risk scores]
+
+%% Compliance Loop %%
+
+J[Deletion or Amendment Event] --> D
+J --> E
+J --> H
+J --> K[Retrain-or-Invalidate Engine]
+
+%% Auditing %%
+
+C --> L[Lineage Graph Database]
+E --> L
+G --> L
+H --> L
+
+L --> M[Compliance and Reporting APIs]
