@@ -21,12 +21,7 @@ WHY LANGGRAPH:
 4. OBSERVABILITY: Each node is traceable
 5. TESTABILITY: Can test individual nodes in isolation
 
-INTERVIEW TALKING POINT:
-------------------------
-"I refactored from a monolithic agent to a LangGraph state machine.
-Each step - retrieval, analysis, safety checks - is a separate node.
-Each node is created by a factory that injects dependencies, so I can
-test the retrieval node with a mock store in under 1ms."
+
 """
 
 # Re-export everything from the elevated modules for backward compatibility

@@ -155,8 +155,8 @@ THYROID_CASES: list[GoldenCase] = [
             "Free T3": "normal",  # just above lower bound, within range
         },
 
-        # Simulated doc IDs for retrieval eval
-        expected_doc_ids=["doc_thyroid_101", "doc_tsh_interpretation"],
+        # Simulated doc IDs for retrieval eval (all thyroid-related docs for these markers)
+        expected_doc_ids=["doc_thyroid_101", "doc_tsh_interpretation", "doc_hyperthyroid_patterns", "doc_subclinical_thyroid"],
 
         must_include_doctor_recommendation=True,
         must_not_diagnose=True,
@@ -200,7 +200,7 @@ THYROID_CASES: list[GoldenCase] = [
             "Free T4": "normal",
         },
 
-        expected_doc_ids=["doc_thyroid_101"],
+        expected_doc_ids=["doc_thyroid_101", "doc_tsh_interpretation", "doc_hyperthyroid_patterns", "doc_subclinical_thyroid"],
 
         must_include_doctor_recommendation=True,  # Still recommend routine checkups
         must_not_diagnose=True,
@@ -246,7 +246,7 @@ THYROID_CASES: list[GoldenCase] = [
             "Free T4": "high",
         },
 
-        expected_doc_ids=["doc_thyroid_101", "doc_hyperthyroid_patterns"],
+        expected_doc_ids=["doc_thyroid_101", "doc_tsh_interpretation", "doc_hyperthyroid_patterns", "doc_subclinical_thyroid"],
 
         must_include_doctor_recommendation=True,
         must_not_diagnose=True,
@@ -283,7 +283,7 @@ THYROID_CASES: list[GoldenCase] = [
             "TSH": "high",  # 4.2 is above upper bound (4.0), LLM correctly flags as high
         },
 
-        expected_doc_ids=["doc_thyroid_101", "doc_subclinical_thyroid"],
+        expected_doc_ids=["doc_thyroid_101", "doc_tsh_interpretation", "doc_hyperthyroid_patterns", "doc_subclinical_thyroid"],
 
         must_include_doctor_recommendation=True,
         must_not_diagnose=True,
@@ -328,7 +328,7 @@ THYROID_CASES: list[GoldenCase] = [
             "Vitamin D": "low",
         },
 
-        expected_doc_ids=["doc_thyroid_101", "doc_vitamin_d"],
+        expected_doc_ids=["doc_thyroid_101", "doc_tsh_interpretation", "doc_hyperthyroid_patterns", "doc_subclinical_thyroid", "doc_vitamin_d"],
 
         must_include_doctor_recommendation=True,
         must_not_diagnose=True,
