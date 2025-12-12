@@ -1,0 +1,49 @@
+
+============================================================
+RUNNING AGENTS (once, results shared across all gates)
+============================================================
+  Running agent on case 1/5: thyroid-001...
+    OK
+  Running agent on case 2/5: thyroid-002...
+    OK
+  Running agent on case 3/5: thyroid-003...
+    OK
+  Running agent on case 4/5: thyroid-004...
+    OK
+  Running agent on case 5/5: thyroid-005...
+    OK
+
+Agent runs: 5/5 successful
+
+============================================================
+RUNNING: Schema Validation
+============================================================
+
+>>> Schema Validation: PASSED (Pass rate: 100.0%)
+
+============================================================
+RUNNING: Retrieval Quality
+============================================================
+
+>>> Retrieval Quality: PASSED (Avg F1: 0.87)
+
+============================================================
+RUNNING: LLM-as-Judge
+============================================================
+
+>>> LLM-as-Judge: FAILED (Avg score: 4.68/5)
+
+============================================================
+EVALUATION REPORT
+============================================================
+  [PASS] Schema Validation: Pass rate: 100.0% (0ms)
+  [PASS] Retrieval Quality: Avg F1: 0.87 (0ms)
+  [FAIL] LLM-as-Judge: Avg score: 4.68/5 (30271ms)
+  [SKIP] Performance Regression: Skipped due to prior failure (0ms)
+------------------------------------------------------------
+Total: 2 passed, 1 failed
+Duration: 76180ms
+
+============================================================
+>>> EVAL GATES FAILED <<<
+============================================================

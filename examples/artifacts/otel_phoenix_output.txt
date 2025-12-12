@@ -1,0 +1,51 @@
+/opt/miniconda3/lib/python3.12/contextlib.py:144: SAWarning: Skipped unsupported reflection of expression-based index ix_cumulative_llm_token_count_total
+  next(self.gen)
+/opt/miniconda3/lib/python3.12/contextlib.py:144: SAWarning: Skipped unsupported reflection of expression-based index ix_latency
+  next(self.gen)
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+E0000 00:00:1765554995.334103 483556098 chttp2_server.cc:1116] UNKNOWN:No address added out of total 1 resolved for '[::]:4317' {created_time:"2025-12-12T10:56:35.333867-05:00", children:[UNKNOWN:Failed to add any wildcard listeners {created_time:"2025-12-12T10:56:35.333857-05:00", children:[UNKNOWN:Unable to configure socket {fd:15, created_time:"2025-12-12T10:56:35.333831-05:00", children:[UNKNOWN:bind: Address already in use (48) {created_time:"2025-12-12T10:56:35.333817-05:00"}]}, UNKNOWN:Unable to configure socket {created_time:"2025-12-12T10:56:35.333856-05:00", fd:15, children:[UNKNOWN:bind: Address already in use (48) {created_time:"2025-12-12T10:56:35.333851-05:00"}]}]}]}
+ERROR:    Traceback (most recent call last):
+  File "/opt/miniconda3/lib/python3.12/site-packages/starlette/routing.py", line 734, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+  File "/opt/miniconda3/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/lib/python3.12/site-packages/phoenix/server/app.py", line 628, in lifespan
+    await stack.enter_async_context(grpc_server)
+  File "/opt/miniconda3/lib/python3.12/contextlib.py", line 659, in enter_async_context
+    result = await _enter(cm)
+             ^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/lib/python3.12/site-packages/phoenix/server/grpc_server.py", line 108, in __aenter__
+    server.add_insecure_port(f"[::]:{get_env_grpc_port()}")
+  File "/opt/miniconda3/lib/python3.12/site-packages/grpc/aio/_server.py", line 102, in add_insecure_port
+    return _common.validate_port_binding_result(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/lib/python3.12/site-packages/grpc/_common.py", line 181, in validate_port_binding_result
+    raise RuntimeError(_ERROR_MESSAGE_PORT_BINDING_FAILED % address)
+RuntimeError: Failed to bind to address [::]:4317; set GRPC_VERBOSITY=debug environment variable to see detailed error message.
+
+ERROR:    Application startup failed. Exiting.
+Failed to initialize Phoenix: module 'phoenix' has no attribute 'otel'
+🌍 To view the Phoenix app in your browser, visit http://localhost:6006/
+📖 For more information on how to use Phoenix, check out https://arize.com/docs/phoenix
+============================================================
+OTEL/PHOENIX OBSERVABILITY DEMO
+============================================================
+
+Tracing agent run for case: thyroid-001
+----------------------------------------
+  Eval score: 4.5/5
+
+Span attributes recorded:
+  - eval.case_id
+  - eval.case_query
+  - agent.success
+  - agent.latency_ms
+  - agent.input_tokens
+  - agent.output_tokens
+  - eval.framework
+  - eval.score
+
+Note: With PHOENIX_ENABLED=true, these traces are
+viewable in Phoenix UI at http://localhost:6006
+============================================================

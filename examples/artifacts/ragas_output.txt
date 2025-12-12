@@ -1,0 +1,21 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.4, pytest-8.4.2, pluggy-1.5.0 -- /opt/miniconda3/bin/python
+cachedir: .pytest_cache
+django: version: 5.2.1
+rootdir: /Users/dancapri/Development/experiments/agent-eval-pipeline
+configfile: pyproject.toml
+plugins: asyncio-0.24.0, repeat-0.9.4, anyio-4.12.0, Faker-37.4.0, xdist-3.8.0, django-4.9.0, deepeval-3.7.4, rerunfailures-16.1, cov-7.0.0, langsmith-0.4.33
+asyncio: mode=Mode.AUTO, default_loop_scope=None
+collecting ... collected 8 items
+
+tests/test_ragas_adapters.py::TestFormatLabsText::test_formats_labs_with_reference PASSED [ 12%]
+tests/test_ragas_adapters.py::TestFormatLabsText::test_formats_labs_without_reference PASSED [ 25%]
+tests/test_ragas_adapters.py::TestFormatLabsText::test_handles_empty_labs PASSED [ 37%]
+tests/test_ragas_adapters.py::TestFormatUserInput::test_includes_query PASSED [ 50%]
+tests/test_ragas_adapters.py::TestFormatUserInput::test_includes_labs PASSED [ 62%]
+tests/test_ragas_adapters.py::TestFormatUserInput::test_includes_symptoms PASSED [ 75%]
+tests/test_ragas_adapters.py::TestFormatUserInput::test_handles_no_symptoms PASSED [ 87%]
+tests/test_ragas_adapters.py::TestFormatReference::test_formats_semantic_points PASSED [100%]Running teardown with pytest sessionfinish...
+
+
+============================== 8 passed in 1.70s ===============================

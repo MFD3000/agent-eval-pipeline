@@ -1,0 +1,55 @@
+
+Running RAGAS evaluation on 3 cases...
+==================================================
+Running agent on cases...
+  thyroid-001... OK
+  thyroid-002... OK
+  thyroid-003... OK
+
+Creating RAGAS dataset...
+  Valid samples: 3
+  Failed/skipped: 0
+
+Configuring RAGAS metrics...
+  Metrics: ['Faithfulness', 'LLMContextPrecisionWithReference', 'LLMContextRecall', 'AnswerRelevancy', 'FactualCorrectness']
+
+Running RAGAS evaluation (this may take a minute)...
+Evaluating:   0%|          | 0/15 [00:00<?, ?it/s]LLM returned 1 generations instead of requested 3. Proceeding with 1 generations.
+LLM returned 1 generations instead of requested 3. Proceeding with 1 generations.
+LLM returned 1 generations instead of requested 3. Proceeding with 1 generations.
+Evaluating:   7%|▋         | 1/15 [00:09<02:07,  9.11s/it]Evaluating:  27%|██▋       | 4/15 [00:11<00:25,  2.34s/it]Evaluating:  40%|████      | 6/15 [00:12<00:13,  1.50s/it]Evaluating:  47%|████▋     | 7/15 [00:24<00:32,  4.03s/it]Evaluating:  53%|█████▎    | 8/15 [00:25<00:23,  3.32s/it]Evaluating:  60%|██████    | 9/15 [00:26<00:15,  2.55s/it]Evaluating:  67%|██████▋   | 10/15 [00:33<00:19,  3.85s/it]Evaluating:  73%|███████▎  | 11/15 [00:35<00:13,  3.29s/it]Evaluating:  80%|████████  | 12/15 [00:36<00:07,  2.60s/it]Evaluating:  93%|█████████▎| 14/15 [00:36<00:01,  1.47s/it]Evaluating: 100%|██████████| 15/15 [00:37<00:00,  1.53s/it]Evaluating: 100%|██████████| 15/15 [00:37<00:00,  2.53s/it]
+
+Processing results...
+
+==================================================
+RAGAS EVALUATION SUMMARY
+==================================================
+Total Cases: 3
+Evaluated: 3
+Passed: 0
+Failed: 3
+Skipped: 0
+Pass Rate: 0.0%
+
+Metric Averages:
+  faithfulness: 0.443 (threshold: 0.8) [FAIL]
+  llm_context_precision_with_reference: 0.967 (threshold: 0) [PASS]
+  context_recall: 0.622 (threshold: 0.7) [FAIL]
+  answer_relevancy: 0.572 (threshold: 0.7) [FAIL]
+  factual_correctness(mode=f1): 0.537 (threshold: 0) [PASS]
+
+============================================================
+RAGAS EVALUATION SUMMARY
+============================================================
+Total cases: 3
+Evaluated: 3
+Skipped: 0
+Pass rate: 0.0%
+All passed: False
+
+Metric Averages:
+  faithfulness: 0.443
+  llm_context_precision_with_reference: 0.967
+  context_recall: 0.622
+  answer_relevancy: 0.572
+  factual_correctness(mode=f1): 0.537

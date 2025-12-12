@@ -1,0 +1,26 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.4, pytest-8.4.2, pluggy-1.5.0
+django: version: 5.2.1
+rootdir: /Users/dancapri/Development/experiments/agent-eval-pipeline
+configfile: pyproject.toml
+plugins: asyncio-0.24.0, repeat-0.9.4, anyio-4.12.0, Faker-37.4.0, xdist-3.8.0, django-4.9.0, deepeval-3.7.4, rerunfailures-16.1, cov-7.0.0, langsmith-0.4.33
+asyncio: mode=Mode.AUTO, default_loop_scope=None
+collected 189 items
+
+tests/test_agent_nodes.py .........                                      [  4%]
+tests/test_cli_commands.py .......                                       [  8%]
+tests/test_comparative_runner.py ..............                          [ 15%]
+tests/test_context_sharing.py ....................                       [ 26%]
+tests/test_eval_frameworks.py ......................                     [ 38%]
+tests/test_evals.py ...............                                      [ 46%]
+tests/test_harness.py ......                                             [ 49%]
+tests/test_observability.py ......................                       [ 60%]
+tests/test_perf_evaluator.py ..........                                  [ 66%]
+tests/test_pgvector_store.py ..............                              [ 73%]
+tests/test_ragas_adapters.py ........                                    [ 77%]
+tests/test_retrieval_store.py ...........                                [ 83%]
+tests/test_schema_eval.py ..................                             [ 93%]
+tests/test_unified_runner.py .............                               [100%]Running teardown with pytest sessionfinish...
+
+
+============================= 189 passed in 16.13s =============================

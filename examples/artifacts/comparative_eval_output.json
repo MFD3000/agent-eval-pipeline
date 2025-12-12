@@ -1,0 +1,40 @@
+{
+    "timestamp": "2025-12-12T10:59:52.524587",
+    "cases_evaluated": 5,
+    "agents": [
+        "langgraph",
+        "dspy_react"
+    ],
+    "summaries": {
+        "langgraph": {
+            "agent_type": "langgraph",
+            "total_cases": 5,
+            "successful_cases": 5,
+            "failed_cases": 0,
+            "schema_pass_rate": 0.8,
+            "avg_latency_ms": 8255.93318939209,
+            "p50_latency_ms": 8242.2935962677,
+            "p95_latency_ms": 10575.868129730225,
+            "avg_tokens": 1149.2,
+            "total_tokens": 5746,
+            "avg_tools_used": null,
+            "avg_docs_retrieved": 5.0
+        },
+        "dspy_react": {
+            "agent_type": "dspy_react",
+            "total_cases": 5,
+            "successful_cases": 5,
+            "failed_cases": 0,
+            "schema_pass_rate": 1.0,
+            "avg_latency_ms": 8457.982587814331,
+            "p50_latency_ms": 8353.128910064697,
+            "p95_latency_ms": 11401.796102523804,
+            "avg_tokens": 1601.0,
+            "total_tokens": 8005,
+            "avg_tools_used": 1.8,
+            "avg_docs_retrieved": null
+        }
+    },
+    "winner": "dspy_react",
+    "recommendation": "dspy_react has higher schema pass rate (100% vs 80%); langgraph uses fewer tokens (1149 vs 1601)"
+}
