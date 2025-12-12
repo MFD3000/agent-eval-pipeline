@@ -7,12 +7,7 @@ on golden cases or raw inputs. It handles:
 - Graph invocation
 - Result conversion
 
-INTERVIEW TALKING POINT:
-------------------------
-"The runner is a thin layer that converts between external interfaces
-(GoldenCase, raw dicts) and the internal AgentState. It orchestrates
-graph invocation but doesn't contain business logic. The actual
-intelligence is in the nodes."
+
 """
 
 from __future__ import annotations

@@ -10,12 +10,7 @@ PATTERN: This follows the same structure as embeddings/openai_embeddings.py
 - Factory functions for instantiation
 - Test doubles for fast unit tests
 
-INTERVIEW TALKING POINT:
-------------------------
-"Every infrastructure component follows the same pattern: a Protocol defines
-the contract, concrete classes implement it, mock versions enable fast tests,
-and factory functions handle instantiation. This is hexagonal architecture
-applied consistently across the codebase."
+
 """
 
 from __future__ import annotations

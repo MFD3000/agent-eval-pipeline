@@ -12,12 +12,6 @@ The code has been split into focused modules:
 This file re-exports for backward compatibility. New code should import
 from the specific modules or from agent_eval_pipeline.retrieval directly.
 
-INTERVIEW TALKING POINT:
-------------------------
-"We use pgvector for RAG because it lets us combine vector similarity
-with traditional SQL queries - filtering by document type, freshness,
-or member context. Plus, the ops team already knows Postgres, so
-there's no new infrastructure to learn."
 """
 
 # Re-export everything from the elevated modules for backward compatibility

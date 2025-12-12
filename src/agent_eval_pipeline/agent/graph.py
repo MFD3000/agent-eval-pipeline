@@ -12,12 +12,6 @@ STREAMING SUPPORT:
 Pass streaming=True to enable token streaming for better perceived latency.
 Use on_token callback to receive tokens as they arrive for real-time UI updates.
 
-INTERVIEW TALKING POINT:
-------------------------
-"The graph module is pure orchestration. It takes injected dependencies
-and wires them into nodes. The actual logic is in the node functions.
-This means I can build the same graph structure with different
-implementations - mock stores for testing, real stores for production."
 """
 
 from __future__ import annotations

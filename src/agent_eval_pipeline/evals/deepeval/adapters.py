@@ -10,13 +10,6 @@ Adapters allow us to use DeepEval's metrics without coupling our domain
 models to their framework. If DeepEval changes its API, we only update
 this file.
 
-INTERVIEW TALKING POINT:
-------------------------
-"The adapter layer decouples our domain model from evaluation frameworks.
-GoldenCase has healthcare-specific fields like 'labs' and 'symptoms'.
-The adapter transforms this into DeepEval's generic LLMTestCase with
-'input', 'actual_output', and 'retrieval_context'. This means we can
-switch evaluation frameworks without touching our golden sets."
 """
 
 from __future__ import annotations

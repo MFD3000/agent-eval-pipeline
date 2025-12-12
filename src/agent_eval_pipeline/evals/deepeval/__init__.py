@@ -7,12 +7,6 @@ DeepEval is an open-source LLM evaluation framework that provides:
 - G-Eval for custom LLM-as-judge metrics
 - Native pytest integration with assert_test
 
-INTERVIEW TALKING POINT:
-------------------------
-"DeepEval gives us pytest-native LLM testing. I can write test_safety()
-that runs G-Eval metrics and fails the build if safety score drops below
-threshold. The assert_test function integrates with pytest's assertion
-system, so CI treats LLM evals like regular unit tests."
 
 WHY DEEPEVAL:
 -------------
