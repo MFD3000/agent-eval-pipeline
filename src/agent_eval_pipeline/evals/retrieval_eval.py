@@ -101,6 +101,7 @@ DOCUMENT_CORPUS = {
 def simulate_retrieval(
     markers: list[str],
     noise_probability: float = 0.1,
+    rng: random.Random | None = None,
 ) -> list[str]:
     """
     Simulate document retrieval based on markers.
@@ -114,10 +115,14 @@ def simulate_retrieval(
     Args:
         markers: Lab markers to retrieve documents for
         noise_probability: Chance of including irrelevant docs (simulates imperfect retrieval)
+        rng: Random number generator for reproducibility. If None, uses global random.
 
     Returns:
         List of document IDs
     """
+    # Use provided RNG or fall back to global (for backwards compatibility)
+    rand = rng.random if rng else random.random
+
     retrieved = []
 
     for doc_id, doc in DOCUMENT_CORPUS.items():
@@ -127,7 +132,7 @@ def simulate_retrieval(
 
         if doc_markers & query_markers:
             retrieved.append(doc_id)
-        elif random.random() < noise_probability:
+        elif rand() < noise_probability:
             # Simulate occasional noise
             retrieved.append(doc_id)
 
@@ -229,10 +234,15 @@ def calculate_retrieval_metrics(
     )
 
 
+# Default seed for reproducible CI runs
+DEFAULT_RETRIEVAL_SEED = 42
+
+
 def run_retrieval_eval(
     cases: list[GoldenCase] | None = None,
     threshold: float = 0.8,
     verbose: bool = False,
+    seed: int | None = DEFAULT_RETRIEVAL_SEED,
 ) -> RetrievalEvalReport:
     """
     Run retrieval eval on golden cases.
@@ -241,12 +251,17 @@ def run_retrieval_eval(
         cases: Cases to evaluate. Defaults to all golden cases.
         threshold: Minimum F1 score to pass. Default 0.8.
         verbose: Print progress.
+        seed: Random seed for reproducible results. Default 42.
+              Set to None for non-deterministic behavior.
 
     Returns:
         RetrievalEvalReport with metrics for each case.
     """
     cases = cases or get_all_golden_cases()
     results: list[RetrievalEvalResult] = []
+
+    # Create seeded RNG for reproducibility
+    rng = random.Random(seed) if seed is not None else None
 
     for case in cases:
         if verbose:
@@ -261,8 +276,8 @@ def run_retrieval_eval(
         # Get markers from the case
         markers = [lab.marker for lab in case.labs]
 
-        # Run retrieval (simulated)
-        retrieved = simulate_retrieval(markers)
+        # Run retrieval (simulated) with seeded RNG
+        retrieved = simulate_retrieval(markers, rng=rng)
 
         # Calculate metrics
         metrics = calculate_retrieval_metrics(retrieved, case.expected_doc_ids)
@@ -300,11 +315,31 @@ def run_retrieval_eval(
 
 def run_retrieval_eval_cli():
     """CLI entry point for retrieval eval."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run retrieval quality eval")
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_RETRIEVAL_SEED,
+        help=f"Random seed for reproducibility (default: {DEFAULT_RETRIEVAL_SEED})",
+    )
+    parser.add_argument(
+        "--no-seed",
+        action="store_true",
+        help="Disable seeding for non-deterministic behavior",
+    )
+    args = parser.parse_args()
+
+    seed = None if args.no_seed else args.seed
+
     print("=" * 60)
     print("RETRIEVAL QUALITY EVAL")
     print("=" * 60)
+    if seed is not None:
+        print(f"Using seed: {seed}")
 
-    report = run_retrieval_eval(verbose=True, threshold=0.8)
+    report = run_retrieval_eval(verbose=True, threshold=0.8, seed=seed)
 
     print("\n" + "=" * 60)
     print("RESULTS")

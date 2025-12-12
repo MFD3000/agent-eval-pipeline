@@ -101,6 +101,11 @@ def get_agent_graph(
     For most use cases, this is the preferred way to get a graph.
     It handles store initialization and caching.
 
+    CACHING BEHAVIOR:
+    - If store is explicitly provided, caching is BYPASSED to respect DI
+    - If store is None (default), caches by store type for performance
+    - Use force_rebuild=True to rebuild even with default store
+
     Args:
         store: Optional VectorStore. If None, creates default.
         model: Optional ChatOpenAI. If None, creates default.
@@ -109,24 +114,28 @@ def get_agent_graph(
     Returns:
         Compiled StateGraph
     """
-    # Create cache key based on configuration
-    cache_key = f"{type(store).__name__ if store else 'default'}"
+    # If a store is explicitly provided, bypass cache to respect dependency injection
+    # This ensures tests with different fixtures get fresh graphs
+    if store is not None:
+        return build_agent_graph(store, model)
+
+    # For default store case, use caching for performance
+    cache_key = "default"
 
     # Return cached if available
     if cache_key in _graph_cache and not force_rebuild:
         return _graph_cache[cache_key]
 
-    # Create store if not provided
-    if store is None:
-        import os
-        from agent_eval_pipeline.retrieval import get_vector_store, seed_vector_store
+    # Create default store
+    import os
+    from agent_eval_pipeline.retrieval import get_vector_store, seed_vector_store
 
-        use_postgres = os.environ.get("USE_POSTGRES", "false").lower() == "true"
-        store = get_vector_store(use_postgres=use_postgres)
-        store.connect()
+    use_postgres = os.environ.get("USE_POSTGRES", "false").lower() == "true"
+    store = get_vector_store(use_postgres=use_postgres)
+    store.connect()
 
-        # Seed on first use
-        seed_vector_store(store)
+    # Seed on first use
+    seed_vector_store(store)
 
     # Build and cache
     graph = build_agent_graph(store, model)

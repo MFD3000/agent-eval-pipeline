@@ -12,13 +12,7 @@ DEPENDENCY INJECTION:
 The run_perf_eval function accepts a BaselineStore parameter.
 This allows testing regression detection without file I/O.
 
-INTERVIEW TALKING POINT:
-------------------------
-"The perf evaluator injects its baseline store. In production,
-it uses FileBaselineStore to persist between CI runs. In tests,
-I inject InMemoryBaselineStore with a known baseline and verify
-that a 20% token increase triggers a regression failure. The
-test runs in milliseconds without touching the filesystem."
+
 """
 
 from __future__ import annotations

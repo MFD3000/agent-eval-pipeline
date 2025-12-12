@@ -112,25 +112,20 @@ class UnifiedEvalReport:
 def run_schema_eval(cases: list[GoldenCase], verbose: bool = False) -> FrameworkResult:
     """Run schema validation."""
     try:
-        from agent_eval_pipeline.evals.schema_eval import run_schema_validation
-        from agent_eval_pipeline.agent import run_agent
+        from agent_eval_pipeline.evals.schema_eval import run_schema_eval as _run_schema_eval
 
-        passed = 0
-        failed = 0
-
-        for case in cases:
-            result = run_agent(case)
-            if hasattr(result, 'output'):
-                # If we got output, schema passed
-                passed += 1
-            else:
-                failed += 1
+        # Run the actual schema eval which validates outputs against expectations
+        report = _run_schema_eval(cases=cases, verbose=verbose)
 
         return FrameworkResult(
             framework=EvalFramework.SCHEMA,
-            passed=failed == 0,
-            scores={"pass_rate": passed / len(cases) if cases else 0},
-            details={"passed": passed, "failed": failed},
+            passed=report.all_passed,
+            scores={"pass_rate": report.pass_rate},
+            details={
+                "passed": report.passed_cases,
+                "failed": report.failed_cases,
+                "total": report.total_cases,
+            },
         )
     except Exception as e:
         return FrameworkResult(

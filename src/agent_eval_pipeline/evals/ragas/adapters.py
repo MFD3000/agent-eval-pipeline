@@ -73,12 +73,12 @@ def format_response(output: LabInsightsSummary) -> str:
         ])
         parts.append(f"\nKey Insights:\n{insights}")
 
-    if output.doctor_discussion_topics:
-        topics = ", ".join(output.doctor_discussion_topics)
+    if output.recommended_topics_for_doctor:
+        topics = ", ".join(output.recommended_topics_for_doctor)
         parts.append(f"\nDiscuss with your doctor: {topics}")
 
-    if output.lifestyle_recommendations:
-        lifestyle = ", ".join(output.lifestyle_recommendations)
+    if output.lifestyle_considerations:
+        lifestyle = ", ".join(output.lifestyle_considerations)
         parts.append(f"\nLifestyle considerations: {lifestyle}")
 
     return "\n".join(parts)
@@ -147,10 +147,10 @@ def agent_result_to_ragas_sample(
     if isinstance(result, AgentError):
         return None
 
-    # Extract retrieved document contents
+    # Extract retrieved document contents (retrieved_docs is list[dict])
     retrieved_contexts = []
     if hasattr(result, 'retrieved_docs') and result.retrieved_docs:
-        retrieved_contexts = [doc.content for doc in result.retrieved_docs]
+        retrieved_contexts = [doc["content"] for doc in result.retrieved_docs]
 
     # If no retrieval context, add the lab data as context
     # (RAGAS needs some context for faithfulness)
@@ -239,10 +239,10 @@ def create_ragas_dataset_from_results(
         valid_cases.append(case)
         valid_outputs.append(result.output)
 
-        # Extract contexts
+        # Extract contexts (retrieved_docs is list[dict])
         contexts = []
         if hasattr(result, 'retrieved_docs') and result.retrieved_docs:
-            contexts = [doc.content for doc in result.retrieved_docs]
+            contexts = [doc["content"] for doc in result.retrieved_docs]
         valid_contexts.append(contexts)
 
     dataset = create_ragas_dataset(valid_cases, valid_outputs, valid_contexts)

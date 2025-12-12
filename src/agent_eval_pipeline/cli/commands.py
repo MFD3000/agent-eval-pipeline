@@ -46,14 +46,16 @@ def run_schema_cli() -> int:
 
     if not args.quiet:
         for result in report.results:
-            status = "PASS" if result.is_valid else "FAIL"
+            status = "PASS" if result.passed else "FAIL"
             print(f"  [{status}] {result.case_id}")
-            if not result.is_valid:
-                for error in result.errors[:3]:
-                    print(f"        Error: {error}")
+            if not result.passed and result.error:
+                print(f"        Error: {result.error}")
+            if result.invalid_values:
+                for marker, issue in result.invalid_values.items():
+                    print(f"        {marker}: {issue}")
 
     print(f"\nPass rate: {report.pass_rate:.1%}")
-    print(f"Total: {report.passed}/{report.total}")
+    print(f"Total: {report.passed_cases}/{report.total_cases}")
 
     if report.all_passed:
         print("\n>>> SCHEMA EVAL GATE: PASSED <<<")
@@ -82,11 +84,11 @@ def run_retrieval_cli() -> int:
     if not args.quiet:
         for result in report.results:
             status = "PASS" if result.passed else "FAIL"
-            print(f"  [{status}] {result.query} (F1: {result.f1:.2f})")
+            print(f"  [{status}] {result.case_id} (F1: {result.metrics.f1_score:.2f})")
 
     print(f"\nAverage F1: {report.avg_f1:.2f}")
     print(f"Threshold: {report.threshold}")
-    print(f"Passed: {report.passed}/{report.total}")
+    print(f"Passed: {report.passed_cases}/{report.total_cases}")
 
     if report.all_passed:
         print("\n>>> RETRIEVAL EVAL GATE: PASSED <<<")

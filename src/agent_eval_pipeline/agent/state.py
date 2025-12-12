@@ -4,12 +4,7 @@ Agent state definition - the data flowing through the LangGraph.
 Separated because state schema changes for different reasons than
 node logic or graph structure. Single Responsibility Principle.
 
-INTERVIEW TALKING POINT:
-------------------------
-"The agent state is a TypedDict that flows through the LangGraph nodes.
-By separating it into its own module, I can modify the state shape
-independently of the node implementations. Each node reads from and
-writes to specific state keys."
+
 """
 
 from typing import Annotated, Sequence, TypedDict

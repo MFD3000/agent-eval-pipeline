@@ -95,9 +95,12 @@ class MockEmbeddings:
     def embed(self, text: str) -> np.ndarray:
         """Generate deterministic pseudo-embedding from text hash."""
         import hashlib
+        import math
         h = hashlib.sha256(text.encode()).digest()
-        # Repeat hash to fill dimensions
-        repeated = h * (self._dimensions // 32 + 1)
+        # Each float32 is 4 bytes, SHA256 digest is 32 bytes (8 floats)
+        # Need dimensions * 4 bytes total, so repeat ceil(dimensions * 4 / 32) times
+        repeats = math.ceil(self._dimensions * 4 / 32)
+        repeated = h * repeats
         return np.frombuffer(repeated, dtype=np.float32)[:self._dimensions]
 
     def embed_batch(self, texts: list[str]) -> list[np.ndarray]:

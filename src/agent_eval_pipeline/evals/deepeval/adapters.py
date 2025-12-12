@@ -122,8 +122,8 @@ Reported Symptoms: {symptoms_text}
         actual_output += f"\n\nKey Insights:\n{insights_text}"
 
     # Add doctor topics if available
-    if agent_output.doctor_discussion_topics:
-        actual_output += f"\n\nDiscuss with Doctor: {', '.join(agent_output.doctor_discussion_topics)}"
+    if agent_output.recommended_topics_for_doctor:
+        actual_output += f"\n\nDiscuss with Doctor: {', '.join(agent_output.recommended_topics_for_doctor)}"
 
     return LLMTestCase(
         input=input_text,
@@ -155,10 +155,10 @@ def agent_result_to_test_case(
     if isinstance(result, AgentError):
         return None
 
-    # Extract retrieved docs if available
+    # Extract retrieved docs if available (retrieved_docs is list[dict])
     retrieved_docs = []
     if hasattr(result, 'retrieved_docs') and result.retrieved_docs:
-        retrieved_docs = [doc.content for doc in result.retrieved_docs]
+        retrieved_docs = [doc["content"] for doc in result.retrieved_docs]
 
     return golden_case_to_llm_test_case(
         case=case,
