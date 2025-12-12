@@ -3,17 +3,10 @@ DeepEval Evaluator - Main evaluation runner using DeepEval framework.
 
 This module provides the entry point for running DeepEval-based evaluations
 on golden cases. It orchestrates:
-1. Running the agent on cases
+1. Running the agent on cases (or using pre-computed AgentRunContext)
 2. Converting results to LLMTestCase format
 3. Running DeepEval metrics
 4. Aggregating results
-
-INTERVIEW TALKING POINT:
-------------------------
-"The DeepEval evaluator follows our standard pattern - it takes golden cases,
-runs the agent, adapts outputs to DeepEval's format, and runs metrics. I can
-run it standalone for quick checks or integrate with pytest for CI. The
-evaluate() function handles parallelization automatically."
 """
 
 from __future__ import annotations
@@ -36,6 +29,7 @@ from agent_eval_pipeline.evals.deepeval.metrics import (
 
 if TYPE_CHECKING:
     from agent_eval_pipeline.golden_sets.thyroid_cases import GoldenCase
+    from agent_eval_pipeline.harness.context import AgentRunContext
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +168,7 @@ def evaluate_single_case(
 
 def run_deepeval_evaluation(
     cases: list[GoldenCase] | None = None,
+    contexts: list[AgentRunContext] | None = None,
     include_rag_metrics: bool = True,
     verbose: bool = False,
 ) -> DeepEvalReport:
@@ -184,6 +179,8 @@ def run_deepeval_evaluation(
 
     Args:
         cases: Cases to evaluate. Defaults to all golden cases.
+        contexts: Pre-computed AgentRunContext list (avoids re-running agents).
+                  If provided, cases parameter is ignored.
         include_rag_metrics: Include RAG metrics (requires retrieval context)
         verbose: Print progress
 
@@ -200,20 +197,29 @@ def run_deepeval_evaluation(
     from agent_eval_pipeline.golden_sets import get_all_golden_cases
     from agent_eval_pipeline.agent import run_agent, AgentError
 
-    cases = cases or get_all_golden_cases()
     results: list[DeepEvalResult] = []
     critical_failures: list[str] = []
 
-    if verbose:
-        print(f"\nRunning DeepEval evaluation on {len(cases)} cases...")
-        print("=" * 50)
+    # If contexts provided, use them; otherwise run agents (backwards compat)
+    if contexts is not None:
+        cases_to_eval = [(ctx.case, ctx.result) for ctx in contexts]
+        if verbose:
+            print(f"\nRunning DeepEval evaluation on {len(contexts)} cases (using cached contexts)...")
+            print("=" * 50)
+    else:
+        cases = cases or get_all_golden_cases()
+        if verbose:
+            print(f"\nRunning DeepEval evaluation on {len(cases)} cases...")
+            print("=" * 50)
+        # Build case/result pairs by running agents
+        cases_to_eval = []
+        for case in cases:
+            agent_result = run_agent(case)
+            cases_to_eval.append((case, agent_result))
 
-    for case in cases:
+    for case, agent_result in cases_to_eval:
         if verbose:
             print(f"\n{case.id}: {case.description}")
-
-        # Run agent
-        agent_result = run_agent(case)
 
         if isinstance(agent_result, AgentError):
             if verbose:

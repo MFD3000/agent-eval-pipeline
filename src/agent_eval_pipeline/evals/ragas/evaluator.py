@@ -3,17 +3,10 @@ RAGAS Evaluator - Main evaluation runner using RAGAS framework.
 
 RAGAS is designed for batch evaluation using the evaluate() function.
 This module orchestrates:
-1. Running the agent on golden cases
+1. Running the agent on golden cases (or using pre-computed AgentRunContext)
 2. Converting results to RAGAS Dataset format
 3. Running RAGAS metrics in batch
 4. Aggregating and reporting results
-
-INTERVIEW TALKING POINT:
-------------------------
-"RAGAS evaluate() is optimized for batch processing - it runs all metrics
-across all samples efficiently. The results include per-sample scores and
-aggregates. I use this for detailed RAG analysis, especially when tuning
-retrieval parameters or comparing embedding models."
 """
 
 from __future__ import annotations
@@ -37,6 +30,7 @@ from agent_eval_pipeline.evals.ragas.metrics import (
 
 if TYPE_CHECKING:
     from agent_eval_pipeline.golden_sets.thyroid_cases import GoldenCase
+    from agent_eval_pipeline.harness.context import AgentRunContext
 
 
 # ---------------------------------------------------------------------------
@@ -87,6 +81,7 @@ class RagasReport:
 
 def run_ragas_evaluation(
     cases: list[GoldenCase] | None = None,
+    contexts: list[AgentRunContext] | None = None,
     model: str | None = None,
     thresholds: dict[str, float] | None = None,
     verbose: bool = False,
@@ -98,6 +93,8 @@ def run_ragas_evaluation(
 
     Args:
         cases: Cases to evaluate. Defaults to all golden cases.
+        contexts: Pre-computed AgentRunContext list (avoids re-running agents).
+                  If provided, cases parameter is ignored.
         model: LLM model for evaluation. Defaults to JUDGE_MODEL env var.
         thresholds: Pass/fail thresholds per metric. Uses defaults if not provided.
         verbose: Print progress and results.
@@ -113,32 +110,40 @@ def run_ragas_evaluation(
         ...         print(f"{result.case_id} failed: {result.failed_metrics}")
     """
     from agent_eval_pipeline.golden_sets import get_all_golden_cases
-    from agent_eval_pipeline.agent import run_agent
+    from agent_eval_pipeline.agent import run_agent, AgentError
 
-    cases = cases or get_all_golden_cases()
     thresholds = thresholds or DEFAULT_THRESHOLDS
 
-    if verbose:
-        print(f"\nRunning RAGAS evaluation on {len(cases)} cases...")
-        print("=" * 50)
+    # If contexts provided, extract cases and results from them
+    if contexts is not None:
+        cases = [ctx.case for ctx in contexts]
+        agent_results = [ctx.result for ctx in contexts]
+        case_ids = [ctx.case_id for ctx in contexts]
 
-    # Run agent on all cases
-    if verbose:
-        print("Running agent on cases...")
-
-    agent_results = []
-    case_ids = []
-
-    for case in cases:
         if verbose:
-            print(f"  {case.id}...", end=" ")
-        result = run_agent(case)
-        agent_results.append(result)
-        case_ids.append(case.id)
+            print(f"\nRunning RAGAS evaluation on {len(cases)} cases (using cached contexts)...")
+            print("=" * 50)
+    else:
+        # Backwards compatibility: run agents if no contexts provided
+        cases = cases or get_all_golden_cases()
+
         if verbose:
-            from agent_eval_pipeline.agent import AgentError
-            status = "FAIL" if isinstance(result, AgentError) else "OK"
-            print(status)
+            print(f"\nRunning RAGAS evaluation on {len(cases)} cases...")
+            print("=" * 50)
+            print("Running agent on cases...")
+
+        agent_results = []
+        case_ids = []
+
+        for case in cases:
+            if verbose:
+                print(f"  {case.id}...", end=" ")
+            result = run_agent(case)
+            agent_results.append(result)
+            case_ids.append(case.id)
+            if verbose:
+                status = "FAIL" if isinstance(result, AgentError) else "OK"
+                print(status)
 
     # Create dataset
     if verbose:
