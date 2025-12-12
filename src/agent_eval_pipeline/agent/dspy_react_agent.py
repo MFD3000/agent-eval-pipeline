@@ -18,15 +18,6 @@ WHY REACT:
 - Can handle multi-step tasks that require gathering information
 - The reasoning is optimizable with DSPy
 
-INTERVIEW TALKING POINT:
-------------------------
-"I implemented a ReAct agent for lab analysis that can use tools -
-looking up reference ranges, checking drug interactions, searching
-medical literature. DSPy's ReAct module handles the reasoning loop
-automatically. I just define the tools and signature, and it figures
-out when to call what. The reasoning traces are great for debugging
-and explainability."
-
 USE CASE:
 ---------
 The lab insights task sometimes needs external information:
@@ -215,11 +206,6 @@ class LabReActAgent(dspy.Module):
     3. Search for relevant medical context
     4. Reason through complex multi-marker patterns
 
-    INTERVIEW TALKING POINT:
-    "The ReAct agent explicitly reasons before each action. When analyzing
-    complex labs, it might first search for thyroid context, then check
-    if the patient's levothyroxine affects TSH, then synthesize everything.
-    Each reasoning step is logged, making it easy to debug and explain."
     """
 
     def __init__(self):
@@ -313,6 +299,28 @@ Analysis:
 # PUBLIC API
 # ---------------------------------------------------------------------------
 
+# Cache for DSPy LM instances to avoid repeated initialization overhead
+_lm_cache: dict[str, dspy.LM] = {}
+
+
+def _get_or_create_lm(model: str) -> dspy.LM:
+    """
+    Get or create a cached DSPy LM instance.
+
+    Memoizes LM creation to avoid repeated auth and model init overhead.
+    """
+    if model not in _lm_cache:
+        _lm_cache[model] = dspy.LM(
+            f"openai/{model}",
+            api_key=os.environ.get("OPENAI_API_KEY"),
+        )
+    return _lm_cache[model]
+
+
+def reset_lm_cache() -> None:
+    """Clear the LM cache. Useful for testing or changing API keys."""
+    _lm_cache.clear()
+
 
 def create_react_agent(model: str = "gpt-4o-mini") -> LabReActAgent:
     """
@@ -323,11 +331,12 @@ def create_react_agent(model: str = "gpt-4o-mini") -> LabReActAgent:
 
     Returns:
         Configured LabReActAgent
+
+    Note:
+        LM instances are cached to avoid repeated initialization overhead.
+        Use reset_lm_cache() to clear the cache if needed.
     """
-    lm = dspy.LM(
-        f"openai/{model}",
-        api_key=os.environ.get("OPENAI_API_KEY"),
-    )
+    lm = _get_or_create_lm(model)
     dspy.configure(lm=lm)
 
     return LabReActAgent()

@@ -128,6 +128,23 @@ class TestInMemoryVectorStore:
 
         assert results == []
 
+    def test_cosine_similarity_zero_vector_guard(self, mock_embeddings):
+        """Cosine similarity should handle zero vectors without raising."""
+        import numpy as np
+
+        store = InMemoryVectorStore(mock_embeddings)
+
+        # Test with zero vectors - should return 0.0, not raise
+        zero_vec = np.array([0.0, 0.0, 0.0])
+        normal_vec = np.array([1.0, 0.0, 0.0])
+
+        assert store._cosine_similarity(zero_vec, normal_vec) == 0.0
+        assert store._cosine_similarity(normal_vec, zero_vec) == 0.0
+        assert store._cosine_similarity(zero_vec, zero_vec) == 0.0
+
+        # Normal case should still work
+        assert store._cosine_similarity(normal_vec, normal_vec) == 1.0
+
 
 # ---------------------------------------------------------------------------
 # DOCUMENT MODEL

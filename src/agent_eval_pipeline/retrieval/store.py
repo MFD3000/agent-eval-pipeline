@@ -310,8 +310,28 @@ class InMemoryVectorStore:
             self._documents[doc.id] = doc
 
     def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
-        """Calculate cosine similarity between two vectors."""
-        return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+        """
+        Calculate cosine similarity between two vectors.
+
+        Returns 0.0 if either vector has near-zero norm (avoids division by zero).
+        """
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
+
+        # Guard against zero/near-zero vectors (use epsilon for float precision)
+        eps = 1e-10
+        if norm_a < eps or norm_b < eps:
+            return 0.0
+
+        # Use errstate to suppress numpy warning since we've already guarded
+        with np.errstate(invalid="ignore", divide="ignore"):
+            result = float(np.dot(a, b) / (norm_a * norm_b))
+
+        # Final safety check for NaN (can occur with invalid input)
+        if np.isnan(result):
+            return 0.0
+
+        return result
 
     def search(
         self,
