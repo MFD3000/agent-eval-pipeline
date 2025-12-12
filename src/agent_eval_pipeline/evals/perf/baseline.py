@@ -6,14 +6,6 @@ Following the gold standard pattern:
 2. FileBaselineStore for production (persistent)
 3. InMemoryBaselineStore for testing (fast, no I/O)
 4. Factory function for convenience
-
-INTERVIEW TALKING POINT:
-------------------------
-"The baseline store follows the same pattern as our embeddings module.
-Protocol defines load/save operations. FileBaselineStore persists to JSON.
-InMemoryBaselineStore runs entirely in memory for fast tests. I can
-verify regression detection catches a 20% token increase without
-any file I/O."
 """
 
 from __future__ import annotations

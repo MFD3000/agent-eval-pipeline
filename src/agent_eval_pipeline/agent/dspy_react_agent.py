@@ -363,12 +363,6 @@ def run_react_agent(
         ...     symptoms=["mild fatigue"]
         ... )
         >>> print(result)
-
-    INTERVIEW TALKING POINT:
-    "The ReAct agent decides what tools to use based on the query. If
-    someone mentions a medication, it automatically checks for interactions.
-    If there's an unusual marker, it looks up the reference range. The
-    reasoning is explicit and traceable."
     """
     agent = create_react_agent(model=model)
 

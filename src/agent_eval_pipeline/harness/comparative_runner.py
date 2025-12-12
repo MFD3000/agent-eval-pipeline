@@ -11,14 +11,6 @@ COMPARISON METRICS:
 - Latency (p50, p95)
 - Token Usage (cost proxy)
 - Agent-specific metrics (tools used, retrieval docs, etc.)
-
-INTERVIEW TALKING POINT:
-------------------------
-"We run comparative evals to make data-driven agent selection decisions.
-Both agents produce the same LabInsightsSummary schema, so we can fairly
-compare them on quality metrics from LLM-as-judge, latency, and cost.
-LangGraph has RAG retrieval, DSPy ReAct has tool use - different approaches
-to the same problem."
 """
 
 import os

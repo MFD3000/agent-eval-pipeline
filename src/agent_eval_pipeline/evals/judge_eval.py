@@ -17,12 +17,6 @@ WHY LLM-AS-JUDGE:
 Rule-based checks can't evaluate semantic quality like clarity,
 clinical accuracy, or appropriate tone. LLM-as-judge enables
 nuanced evaluation against rubrics.
-
-INTERVIEW TALKING POINT:
-------------------------
-"The judge module follows separation of concerns. Prompts are externalized
-for versioning, schemas define contracts, and the evaluator accepts an
-injectable client for testing without API calls."
 """
 
 # Re-export everything from elevated modules for backward compatibility

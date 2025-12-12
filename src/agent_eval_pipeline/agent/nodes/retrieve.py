@@ -5,13 +5,6 @@ This node is TESTABLE IN ISOLATION because:
 1. VectorStore is injected, not global
 2. No side effects beyond state updates
 3. Deterministic given same inputs
-
-INTERVIEW TALKING POINT:
-------------------------
-"The retrieval node is created by a factory that injects the VectorStore.
-This means I can test it with an InMemoryVectorStore in under 1ms,
-without touching a database. The node itself is a pure function that
-takes state and returns state updates."
 """
 
 from __future__ import annotations

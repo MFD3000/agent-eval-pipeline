@@ -19,14 +19,6 @@ METRIC CATEGORIES:
 
 3. End-to-end metrics (need all fields):
    - Factual Correctness
-
-INTERVIEW TALKING POINT:
-------------------------
-"RAGAS faithfulness works by extracting claims from the response, then
-checking if each claim is supported by the retrieved context. It's more
-sophisticated than simple similarity - it actually reasons about whether
-the information could be derived from the source documents. This catches
-subtle hallucinations that simpler metrics miss."
 """
 
 from __future__ import annotations

@@ -5,14 +5,6 @@ These dataclasses provide a clear schema for:
 1. Per-case performance data
 2. Aggregate metrics
 3. Regression detection results
-
-INTERVIEW TALKING POINT:
-------------------------
-"Metrics are plain dataclasses - no behavior, just data.
-This makes them easy to serialize for reports, compare
-across runs, and use in assertions. The RegressionCheck
-dataclass captures everything needed to understand why
-a regression was detected."
 """
 
 from dataclasses import dataclass, field

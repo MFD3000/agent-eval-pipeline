@@ -13,13 +13,6 @@ tokens are yielded as they arrive (~500ms to first token vs 7-10s for full respo
 Note: Structured output requires the full response for JSON parsing, so we:
 1. Stream tokens for display (optional callback)
 2. Collect full response for structured parsing
-
-INTERVIEW TALKING POINT:
-------------------------
-"The analysis node separates prompt construction from LLM invocation.
-The prompt builder is a pure function I can test without API calls.
-The node factory accepts an optional model, so I can inject a mock
-LLM for integration testing. It also supports streaming for better UX."
 """
 
 from __future__ import annotations

@@ -24,14 +24,6 @@ We support multiple evaluation frameworks to catch different types of issues:
 - RAGAS: RAG-specialized metrics (faithfulness, context precision/recall)
 - Custom: Domain-specific LLM-as-judge with healthcare rubrics
 - DSPy: Optimizable judge that can be tuned with examples
-
-INTERVIEW TALKING POINT:
-------------------------
-"The eval pipeline has multiple gates that run in CI. Schema eval catches
-structural issues in milliseconds. Retrieval eval verifies RAG quality.
-We run DeepEval for pytest-native testing with custom G-Eval metrics,
-RAGAS for specialized RAG evaluation, and our custom judge for domain-specific
-rubrics. Running multiple frameworks means we catch different types of issues."
 """
 
 # Judge evaluation

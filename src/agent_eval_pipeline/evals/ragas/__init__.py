@@ -8,14 +8,6 @@ for evaluating RAG pipelines. It excels at measuring:
 - Context Recall: Are all necessary documents retrieved?
 - Answer Relevancy: Does the answer address the question?
 
-INTERVIEW TALKING POINT:
-------------------------
-"RAGAS is specifically designed for RAG evaluation. While DeepEval gives us
-general LLM testing, RAGAS focuses on the retrieval-generation interplay.
-Its faithfulness metric catches when the LLM 'hallucinates' beyond the
-retrieved context. Context precision/recall tells us if our vector search
-is working properly."
-
 WHY RAGAS:
 ----------
 1. RAG-specific - metrics designed for retrieval + generation

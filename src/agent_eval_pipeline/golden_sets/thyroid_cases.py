@@ -21,13 +21,6 @@ GOLDEN SET PHILOSOPHY:
 - Include edge cases (borderline values, missing history, ambiguous queries)
 - Cover the distribution of real-world inputs
 - Start with 20-50 cases, grow to hundreds
-
-INTERVIEW TALKING POINT:
-------------------------
-"Golden sets encode evaluation criteria, not expected outputs. For each case,
-we specify: what semantic points must be covered, what tools should be called,
-what documents should be retrieved, and what safety constraints must hold.
-The LLM-as-judge scores against these criteria."
 """
 
 from dataclasses import dataclass, field

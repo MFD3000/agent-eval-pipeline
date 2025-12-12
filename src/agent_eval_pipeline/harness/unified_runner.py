@@ -7,14 +7,6 @@ This module provides a single entry point to run evaluations using:
 - RAGAS (RAG-specialized metrics)
 - DSPy Judge (optimizable judge)
 
-INTERVIEW TALKING POINT:
-------------------------
-"We run multiple evaluation frameworks in our CI pipeline. Each has strengths:
-DeepEval gives us pytest integration and custom G-Eval metrics. RAGAS
-specializes in RAG evaluation with faithfulness and context precision. Our
-custom judge uses domain-specific rubrics. Running all three means we catch
-different types of issues and can compare results to build confidence."
-
 EVALUATION-DRIVEN DEVELOPMENT:
 ------------------------------
 Function Health practices "evaluation-driven development" where every change

@@ -17,12 +17,6 @@ WHY THIS MATTERS:
 
 4. DOCUMENTATION: The schema IS the documentation. Anyone can look at
    these models and understand exactly what the agent produces.
-
-INTERVIEW TALKING POINT:
-------------------------
-"We use Pydantic schemas as contracts between the LLM and the rest of the
-system. The first eval gate validates every output against these schemas.
-If a prompt change breaks the structure, the PR is blocked before merge."
 """
 
 from typing import Literal

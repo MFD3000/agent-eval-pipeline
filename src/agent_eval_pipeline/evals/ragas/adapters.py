@@ -11,13 +11,6 @@ SingleTurnSample:
   - response: The LLM's response
   - retrieved_contexts: List of retrieved document texts
   - reference: Ground truth answer (optional for some metrics)
-
-INTERVIEW TALKING POINT:
-------------------------
-"RAGAS needs retrieved_contexts to evaluate faithfulness - it checks if
-claims in the response are grounded in the retrieved docs. Our adapter
-extracts the document content from our RAG pipeline and formats it for
-RAGAS. If we don't have retrieval context, some metrics won't work."
 """
 
 from __future__ import annotations

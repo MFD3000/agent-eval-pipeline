@@ -10,14 +10,6 @@ DEPENDENCY INJECTION:
 ---------------------
 The run_judge function accepts an optional OpenAI client parameter.
 This allows testing without API calls by injecting a mock client.
-
-INTERVIEW TALKING POINT:
-------------------------
-"The judge evaluator follows the factory pattern - run_judge accepts
-an optional client parameter, so I can inject a mock for testing.
-This lets me verify the scoring logic works correctly without
-making any API calls. The calculate_weighted_score function is
-pure, so testing it is trivial."
 """
 
 from __future__ import annotations

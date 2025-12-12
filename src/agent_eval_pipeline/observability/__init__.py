@@ -18,13 +18,6 @@ tracer = get_tracer()
 with tracer.start_span("my_operation", attributes={"key": "value"}) as span:
     # ... do work ...
     span.set_attribute("result", "success")
-
-INTERVIEW TALKING POINT:
-------------------------
-"We use Phoenix for observability because it provides auto-instrumentation
-for OpenAI, LangChain, and DSPy. All LLM calls are traced automatically.
-We add custom spans for eval-specific logic like gate results and scores.
-When Phoenix is disabled, we gracefully degrade to NoOpTracer with zero overhead."
 """
 
 from __future__ import annotations

@@ -5,12 +5,6 @@ These schemas define the contract between:
 - The judge model (what it returns)
 - The evaluation system (what it expects)
 - Downstream consumers (evaluation reports)
-
-INTERVIEW TALKING POINT:
-------------------------
-"Separating schemas from logic means I can validate judge output
-independently of how the judge is called. The DimensionScore model
-with its 1-5 constraint catches invalid responses at parse time."
 """
 
 from dataclasses import dataclass

@@ -18,12 +18,6 @@ WHY PERFORMANCE EVAL:
 A small prompt change can double token usage (and cost), triple latency,
 or break KV-cache efficiency. These regressions are invisible in semantic
 evals but devastate production.
-
-INTERVIEW TALKING POINT:
-------------------------
-"The perf eval module uses the adapter pattern for baseline storage.
-FileBaselineStore persists between CI runs. InMemoryBaselineStore lets
-me test regression detection in milliseconds without file I/O."
 """
 
 # Re-export everything from elevated modules for backward compatibility

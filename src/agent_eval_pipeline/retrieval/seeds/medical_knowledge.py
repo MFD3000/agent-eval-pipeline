@@ -3,12 +3,6 @@ Medical knowledge base seed data.
 
 This module contains the initial documents for the RAG system.
 In production, this would come from a proper content pipeline.
-
-INTERVIEW TALKING POINT:
-------------------------
-"Seed data is externalized so content teams can update medical knowledge
-without touching infrastructure code. The store module has one job:
-persist and query vectors. This module has one job: provide content."
 """
 
 from __future__ import annotations

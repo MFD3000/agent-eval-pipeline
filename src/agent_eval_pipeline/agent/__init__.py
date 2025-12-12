@@ -15,13 +15,6 @@ AVAILABLE AGENTS:
 2. DSPy ReAct Agent: Tool-using agent with explicit reasoning traces
 
 The unified interface (run_agent) selects implementation via AGENT_TYPE env var.
-
-INTERVIEW TALKING POINT:
-------------------------
-"The agent module provides a unified interface that abstracts the implementation.
-LangGraph gives us a state machine with RAG retrieval. DSPy ReAct gives us
-tool-using capabilities with explicit reasoning. Both produce the same
-LabInsightsSummary output, enabling fair comparison in evals."
 """
 
 import os

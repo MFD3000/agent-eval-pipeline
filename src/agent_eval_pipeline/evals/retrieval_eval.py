@@ -35,14 +35,6 @@ PRACTICAL NOTE:
 In production, you'd hook this into your actual retrieval system.
 Here we simulate retrieval to demonstrate the evaluation pattern.
 The important thing is the STRUCTURE of how you evaluate.
-
-INTERVIEW TALKING POINT:
-------------------------
-"Before the agent generates any text, we validate retrieval quality.
-We measure recall and precision against expected documents for each
-golden case. If retrieval quality drops below threshold - say 0.8 F1 -
-the PR is blocked. This catches when embedding model changes or
-chunking strategy modifications break document retrieval."
 """
 
 from __future__ import annotations

@@ -8,14 +8,6 @@ This module contains:
 2. PgVectorStore - PostgreSQL with pgvector (production)
 3. InMemoryVectorStore - In-memory store (testing/development)
 4. get_vector_store() - Factory function
-
-INTERVIEW TALKING POINT:
-------------------------
-"The retrieval layer follows hexagonal architecture. VectorStore is a Protocol
-that defines the contract. PgVectorStore implements it for production with
-PostgreSQL. InMemoryVectorStore implements it for testing - no database needed.
-The factory function decides which to use based on configuration. This means
-I can test retrieval logic in under 1ms without touching a database."
 """
 
 from __future__ import annotations

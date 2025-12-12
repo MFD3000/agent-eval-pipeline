@@ -3,13 +3,6 @@ Safety node - applies guardrails to agent output.
 
 This is a PURE NODE with NO dependencies - it can be called directly
 without any factory pattern. Perfect for unit testing.
-
-INTERVIEW TALKING POINT:
-------------------------
-"The safety node is pure - no external dependencies, no side effects.
-Given the same raw_analysis, it always produces the same output.
-It ensures every response includes appropriate disclaimers and
-doctor recommendations. I can test this in microseconds."
 """
 
 from __future__ import annotations

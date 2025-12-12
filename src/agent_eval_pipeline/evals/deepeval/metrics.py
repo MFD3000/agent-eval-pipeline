@@ -14,14 +14,6 @@ G-Eval lets you define:
 2. evaluation_steps - Step-by-step evaluation process
 3. evaluation_params - Which test case fields to use
 4. threshold - Minimum score to pass (0-1)
-
-INTERVIEW TALKING POINT:
-------------------------
-"I use G-Eval to create domain-specific metrics. For healthcare, I have
-'clinical_correctness' that checks if lab interpretations are accurate,
-and 'safety_compliance' with strict thresholds that verifies we never
-diagnose or prescribe. The evaluation_steps make the LLM's reasoning
-explicit and auditable."
 """
 
 from __future__ import annotations

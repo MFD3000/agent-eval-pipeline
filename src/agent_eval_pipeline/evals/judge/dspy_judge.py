@@ -9,14 +9,6 @@ KEY INSIGHT:
 Traditional approach: Hand-craft a judge prompt, hope it works
 DSPy approach: Define what a good evaluation looks like, let DSPy optimize
 
-INTERVIEW TALKING POINT:
-------------------------
-"We use DSPy for our LLM-as-judge. The traditional approach is to
-hand-craft evaluation prompts and iterate manually. With DSPy, I
-define the evaluation signature and a meta-metric (how good is the
-judge's evaluation?), then let DSPy optimize the judge prompt.
-This is meta-learning - we're optimizing the evaluator itself."
-
 WHY DSPY FOR EVALUATION:
 ------------------------
 1. CONSISTENCY: DSPy signatures enforce structured output
@@ -124,12 +116,6 @@ class DSPyJudge(dspy.Module):
 
     Uses separate ChainOfThought modules for each dimension,
     allowing independent optimization of each evaluation aspect.
-
-    INTERVIEW TALKING POINT:
-    "I decomposed the judge into four separate DSPy modules, one per
-    dimension. This lets me optimize each evaluation aspect independently.
-    If safety scoring is miscalibrated, I can tune just that module
-    without affecting clinical correctness scoring."
     """
 
     def __init__(self):
@@ -325,12 +311,6 @@ def create_judge_metric():
     This is META-OPTIMIZATION: we're optimizing the evaluator itself.
     The metric measures how well the judge's scores correlate with
     human expert ratings.
-
-    INTERVIEW TALKING POINT:
-    "The meta-metric for judge optimization is correlation with human
-    ratings. We have a small set of expert-labeled responses. The
-    optimizer tunes judge prompts to maximize agreement with experts.
-    This is like calibrating a measuring instrument."
     """
 
     def judge_calibration_metric(example, prediction, trace=None):

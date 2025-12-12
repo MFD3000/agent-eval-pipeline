@@ -15,14 +15,6 @@ Following the gold standard pattern from embeddings module:
 2. Multiple implementations (PgVectorStore, InMemoryVectorStore)
 3. Factory function for instantiation
 4. Test doubles for fast unit tests
-
-INTERVIEW TALKING POINT:
-------------------------
-"The retrieval layer is separated into focused modules: document.py for the
-data model, store.py for implementations, seeds/ for knowledge base content.
-Each module has a single responsibility. The store implementations follow
-the Protocol pattern, so I can swap PgVectorStore for InMemoryVectorStore
-in tests without changing any business logic."
 """
 
 # Document model

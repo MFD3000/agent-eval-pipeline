@@ -6,14 +6,6 @@ Prompts are the "secret sauce" of LLM-as-judge. By externalizing them:
 2. We can A/B test different rubrics
 3. We can review prompts in code review
 4. We can test prompt formatting without API calls
-
-INTERVIEW TALKING POINT:
-------------------------
-"I externalized the judge prompt into its own module. This lets me
-version the rubric independently - if I want to experiment with
-different scoring criteria, I can do that without touching the
-evaluation logic. The format function is pure, so I can unit test
-it to ensure all case data gets correctly formatted."
 """
 
 from __future__ import annotations

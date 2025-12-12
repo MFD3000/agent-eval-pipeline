@@ -5,12 +5,6 @@ Pricing is externalized so it can be:
 1. Updated independently when OpenAI changes prices
 2. Extended for new models
 3. Used for cost projections
-
-INTERVIEW TALKING POINT:
-------------------------
-"Cost estimation is separated from evaluation logic. When OpenAI
-updates their pricing, I change one file. The estimate_cost function
-is pure - I can unit test it with exact expected values."
 """
 
 # ---------------------------------------------------------------------------

@@ -7,14 +7,6 @@ ELEVATED ARCHITECTURE:
 - pricing.py: Cost estimation logic
 - metrics.py: Data models for performance metrics
 - evaluator.py: Core evaluation logic with DI
-
-INTERVIEW TALKING POINT:
-------------------------
-"The perf eval module uses the adapter pattern for baseline storage.
-In production, we use FileBaselineStore to persist between runs.
-In tests, InMemoryBaselineStore lets me verify regression detection
-logic without touching the filesystem. The evaluator accepts the
-store via constructor injection."
 """
 
 from agent_eval_pipeline.evals.perf.baseline import (
