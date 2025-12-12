@@ -330,37 +330,46 @@ class TestObservabilityIntegration:
 
             tracer = get_tracer()
 
-            # Simulate harness run pattern
+            # Verify tracer is NoOp when disabled
+            assert isinstance(tracer, NoOpTracer)
+
+            # Simulate harness run pattern - verify spans can be created and nested
             with tracer.start_span(
                 "eval_harness_run",
                 attributes={"eval.harness.run_id": "test-123"},
             ) as root_span:
+                assert isinstance(root_span, NoOpSpan)
                 root_span.set_attribute("eval.harness.cases_count", 5)
 
-                # Simulate gate span
+                # Simulate gate span - verify nesting works
                 with tracer.start_span(
                     "eval_gate.schema_validation",
                     attributes=eval_gate_attributes("schema_validation", "passed"),
                 ) as gate_span:
+                    assert isinstance(gate_span, NoOpSpan)
                     gate_span.set_attribute("eval.gate.pass_rate", 1.0)
                     gate_span.set_status("ok")
 
                 root_span.set_attribute("eval.harness.all_passed", True)
                 root_span.set_status("ok")
 
-        # If we get here without error, the pattern works
-        assert True
-
     def test_exception_handling_in_span(self):
-        """Test that exceptions are properly recorded."""
+        """Test that exceptions propagate correctly through spans."""
         tracer = NoOpTracer()
+
+        exception_raised = False
+        exception_caught = False
 
         try:
             with tracer.start_span("failing_operation") as span:
+                assert isinstance(span, NoOpSpan)
                 span.set_attribute("started", True)
+                exception_raised = True
                 raise ValueError("Test error")
-        except ValueError:
-            pass  # Expected
+        except ValueError as e:
+            exception_caught = True
+            assert str(e) == "Test error"
 
-        # NoOpTracer should not interfere with exception propagation
-        assert True
+        # Verify exception was raised inside span and caught outside
+        assert exception_raised, "Exception should have been raised inside span"
+        assert exception_caught, "Exception should propagate through NoOpSpan"

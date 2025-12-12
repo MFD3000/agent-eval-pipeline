@@ -148,31 +148,3 @@ class TestHarnessReport:
         assert d["gates"][2]["status"] == "skipped"
 
 
-# ---------------------------------------------------------------------------
-# GATE STATUS TESTS
-# ---------------------------------------------------------------------------
-
-
-class TestGateStatus:
-    """Minimal regression tests for GateStatus."""
-
-    def test_gate_status_used_in_gate_result(self):
-        """Verify GateStatus integrates with GateResult behaviorally."""
-        result = GateResult(
-            name="schema",
-            status=GateStatus.PASSED,
-            duration_ms=1.0,
-            summary="ok",
-        )
-
-        report = HarnessReport(
-            timestamp="2024-01-01T00:00:00",
-            total_duration_ms=2.0,
-            all_passed=True,
-            gates=[result],
-            summary="1 passed",
-        )
-
-        serialized = report.to_dict()
-
-        assert serialized["gates"][0]["status"] == GateStatus.PASSED.value

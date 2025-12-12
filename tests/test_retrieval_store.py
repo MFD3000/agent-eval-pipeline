@@ -230,30 +230,3 @@ class TestSearchRanking:
                 assert min(thyroid_positions) < max(cholesterol_positions)
 
 
-# ---------------------------------------------------------------------------
-# PROTOCOL COMPLIANCE
-# ---------------------------------------------------------------------------
-
-
-class TestProtocolCompliance:
-    """Test that InMemoryVectorStore implements VectorStore protocol."""
-
-    def test_has_search_method(self, mock_embeddings):
-        """Store should have search method."""
-        store = InMemoryVectorStore(mock_embeddings)
-
-        assert hasattr(store, 'search')
-        assert callable(store.search)
-
-    def test_has_insert_document_method(self, mock_embeddings):
-        """Store should have insert_document method."""
-        store = InMemoryVectorStore(mock_embeddings)
-
-        assert hasattr(store, 'insert_document')
-        assert callable(store.insert_document)
-
-    def test_search_returns_list(self, store_with_docs):
-        """Search should return a list."""
-        results = store_with_docs.search("test", limit=5)
-
-        assert isinstance(results, list)
