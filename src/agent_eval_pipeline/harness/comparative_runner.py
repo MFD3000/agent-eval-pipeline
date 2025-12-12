@@ -29,7 +29,7 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from typing import Literal
 
-from agent_eval_pipeline.golden_sets.thyroid_cases import GoldenCase, get_all_golden_cases
+from agent_eval_pipeline.golden_sets import GoldenCase, get_all_golden_cases
 from agent_eval_pipeline.agent import run_agent, AgentResult, AgentError, AgentType
 from agent_eval_pipeline.evals.schema_eval import validate_case_output
 from agent_eval_pipeline.observability import (

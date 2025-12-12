@@ -112,7 +112,7 @@ def run_ragas_evaluation(
         ...     if not result.passed:
         ...         print(f"{result.case_id} failed: {result.failed_metrics}")
     """
-    from agent_eval_pipeline.golden_sets.thyroid_cases import get_all_golden_cases
+    from agent_eval_pipeline.golden_sets import get_all_golden_cases
     from agent_eval_pipeline.agent import run_agent
 
     cases = cases or get_all_golden_cases()

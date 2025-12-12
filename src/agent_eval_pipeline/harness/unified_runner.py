@@ -33,7 +33,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from agent_eval_pipeline.golden_sets.thyroid_cases import GoldenCase
+    from agent_eval_pipeline.golden_sets import GoldenCase
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +317,7 @@ def run_unified_eval(
         >>> for fw, result in report.results.items():
         ...     print(f"  {fw.value}: {result.status}")
     """
-    from agent_eval_pipeline.golden_sets.thyroid_cases import get_all_golden_cases
+    from agent_eval_pipeline.golden_sets import get_all_golden_cases
 
     cases = cases or get_all_golden_cases()
     frameworks = frameworks or list(EvalFramework)

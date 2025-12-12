@@ -180,7 +180,7 @@ def run_judge_eval(
         return _run_with_contexts(contexts, threshold, verbose, client)
 
     # Legacy path: run agents internally
-    from agent_eval_pipeline.golden_sets.thyroid_cases import get_all_golden_cases
+    from agent_eval_pipeline.golden_sets import get_all_golden_cases
 
     cases = cases or get_all_golden_cases()
     results: list[JudgeEvalResult] = []

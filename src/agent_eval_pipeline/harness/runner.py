@@ -46,7 +46,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from agent_eval_pipeline.golden_sets.thyroid_cases import get_all_golden_cases
+from agent_eval_pipeline.golden_sets import get_all_golden_cases
 from agent_eval_pipeline.observability import (
     init_phoenix,
     get_tracer,

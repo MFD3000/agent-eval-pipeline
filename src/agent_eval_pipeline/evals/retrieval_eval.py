@@ -51,7 +51,7 @@ from dataclasses import dataclass
 import random
 from typing import TYPE_CHECKING
 
-from agent_eval_pipeline.golden_sets.thyroid_cases import GoldenCase, get_all_golden_cases
+from agent_eval_pipeline.golden_sets import GoldenCase, get_all_golden_cases
 
 if TYPE_CHECKING:
     from agent_eval_pipeline.harness.context import AgentRunContext
