@@ -17,13 +17,19 @@ class PhoenixConfig:
         PHOENIX_ENABLED: Enable Phoenix tracing (default: false)
         PHOENIX_PROJECT_NAME: Project name in Phoenix UI (default: agent-eval-pipeline)
         PHOENIX_COLLECTOR_ENDPOINT: Remote endpoint (optional, local if empty)
-        PHOENIX_CAPTURE_LLM_CONTENT: Log prompts/responses (default: true)
+        PHOENIX_CAPTURE_LLM_CONTENT: Log prompts/responses (default: false)
+
+    PRIVACY WARNING:
+        Setting PHOENIX_CAPTURE_LLM_CONTENT=true will export raw prompts and
+        responses to Phoenix/OTLP endpoints. For healthcare applications, this
+        may include sensitive lab values and patient queries. Only enable in
+        controlled environments with appropriate data handling agreements.
     """
 
     enabled: bool = False
     project_name: str = "agent-eval-pipeline"
     collector_endpoint: str | None = None
-    capture_llm_content: bool = True
+    capture_llm_content: bool = False  # Default False for privacy - health data sensitivity
 
     @classmethod
     def from_env(cls) -> "PhoenixConfig":
@@ -32,7 +38,8 @@ class PhoenixConfig:
             enabled=os.environ.get("PHOENIX_ENABLED", "false").lower() in ("true", "1", "yes"),
             project_name=os.environ.get("PHOENIX_PROJECT_NAME", "agent-eval-pipeline"),
             collector_endpoint=os.environ.get("PHOENIX_COLLECTOR_ENDPOINT") or None,
-            capture_llm_content=os.environ.get("PHOENIX_CAPTURE_LLM_CONTENT", "true").lower() in ("true", "1", "yes"),
+            # Default to False for privacy - must explicitly opt-in to capture content
+            capture_llm_content=os.environ.get("PHOENIX_CAPTURE_LLM_CONTENT", "false").lower() in ("true", "1", "yes"),
         )
 
 

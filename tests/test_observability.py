@@ -64,7 +64,8 @@ class TestPhoenixConfig:
             assert config.enabled is False
             assert config.project_name == "agent-eval-pipeline"
             assert config.collector_endpoint is None
-            assert config.capture_llm_content is True
+            # Default to False for privacy - health data should not be exported by default
+            assert config.capture_llm_content is False
 
     def test_config_from_env_enabled(self):
         """Config should read PHOENIX_ENABLED correctly."""
