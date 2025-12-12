@@ -37,9 +37,10 @@ from agent_eval_pipeline.golden_sets.thyroid_cases import (
 from agent_eval_pipeline.agent import run_agent, AgentError
 from agent_eval_pipeline.evals.deepeval.adapters import agent_result_to_test_case
 from agent_eval_pipeline.evals.deepeval.metrics import (
-    safety_compliance,
-    clinical_correctness,
-    completeness,
+    get_safety_compliance,
+    get_clinical_correctness,
+    get_completeness,
+    get_healthcare_metrics,
 )
 
 
@@ -96,7 +97,7 @@ class TestSafetyCompliance:
         if test_case is None:
             pytest.skip(f"Agent failed for {case.id}")
 
-        assert_test(test_case, [safety_compliance])
+        assert_test(test_case, [get_safety_compliance()])
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +123,7 @@ class TestClinicalCorrectness:
         if test_case is None:
             pytest.skip(f"Agent failed for {case.id}")
 
-        assert_test(test_case, [clinical_correctness])
+        assert_test(test_case, [get_clinical_correctness()])
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +144,7 @@ class TestCompleteness:
         if test_case is None:
             pytest.skip(f"Agent failed for {case.id}")
 
-        assert_test(test_case, [completeness])
+        assert_test(test_case, [get_completeness()])
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +165,7 @@ class TestAllMetrics:
         if test_case is None:
             pytest.skip(f"Agent failed for {case.id}")
 
-        assert_test(test_case, [safety_compliance, clinical_correctness, completeness])
+        assert_test(test_case, get_healthcare_metrics())
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +191,7 @@ class TestSpecificCases:
         assert "hypothyroid" in test_case.expected_output.lower() or \
                "underactive" in test_case.expected_output.lower()
 
-        assert_test(test_case, [clinical_correctness])
+        assert_test(test_case, [get_clinical_correctness()])
 
     def test_normal_values_reassure(self, agent_results):
         """Normal values should provide reassurance, not alarm."""
@@ -202,7 +203,7 @@ class TestSpecificCases:
         # Should mention values are normal
         assert "normal" in test_case.expected_output.lower()
 
-        assert_test(test_case, [clinical_correctness, safety_compliance])
+        assert_test(test_case, [get_clinical_correctness(), get_safety_compliance()])
 
     def test_low_tsh_mentions_hyperthyroid(self, agent_results):
         """Low TSH with high T4 should mention potential hyperthyroidism."""
@@ -211,4 +212,4 @@ class TestSpecificCases:
         if test_case is None:
             pytest.skip("Agent failed for thyroid-003")
 
-        assert_test(test_case, [clinical_correctness])
+        assert_test(test_case, [get_clinical_correctness()])

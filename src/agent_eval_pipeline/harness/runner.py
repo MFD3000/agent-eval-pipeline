@@ -59,6 +59,11 @@ from agent_eval_pipeline.evals.schema_eval import run_schema_eval, SchemaEvalRep
 from agent_eval_pipeline.evals.retrieval_eval import run_retrieval_eval, RetrievalEvalReport
 from agent_eval_pipeline.evals.judge_eval import run_judge_eval, JudgeEvalReport
 from agent_eval_pipeline.evals.perf_eval import run_perf_eval, PerfEvalResult
+from agent_eval_pipeline.harness.context import (
+    AgentRunContext,
+    EvalRunContext,
+    build_agent_contexts,
+)
 
 
 class GateStatus(Enum):
@@ -201,6 +206,7 @@ def run_all_evals(
     fail_fast: bool = True,
     skip_expensive: bool = False,
     verbose: bool = True,
+    contexts: list[AgentRunContext] | None = None,
 ) -> HarnessReport:
     """
     Run all evaluation gates.
@@ -209,9 +215,18 @@ def run_all_evals(
         fail_fast: Stop after first failure
         skip_expensive: Skip LLM-as-judge (for quick local testing)
         verbose: Print progress
+        contexts: Pre-computed agent results. If None, runs agents once upfront.
 
     Returns:
         HarnessReport with all results
+
+    CONTEXT SHARING:
+    ----------------
+    This harness runs agents ONCE and shares results across all evaluators.
+    This provides:
+    - 4-5x reduction in LLM API calls
+    - Consistent evaluation (all gates score the same output)
+    - Real retrieval validation (not simulated)
     """
     tracer = get_tracer()
     run_id = str(uuid.uuid4())
@@ -228,10 +243,27 @@ def run_all_evals(
         gates: list[GateResult] = []
         has_failure = False
 
-        # Gate 1: Schema Eval
+        # Run agents ONCE if contexts not provided
+        if contexts is None:
+            cases = get_all_golden_cases()
+            if verbose:
+                print("\n" + "=" * 60)
+                print("RUNNING AGENTS (once, results shared across all gates)")
+                print("=" * 60)
+            contexts = build_agent_contexts(cases, verbose=verbose)
+
+            # Log agent run stats
+            success_count = sum(1 for ctx in contexts if ctx.success)
+            root_span.set_attribute("eval.harness.agent_runs", len(contexts))
+            root_span.set_attribute("eval.harness.agent_success_count", success_count)
+
+            if verbose:
+                print(f"\nAgent runs: {success_count}/{len(contexts)} successful")
+
+        # Gate 1: Schema Eval (uses contexts)
         schema_result, _ = run_gate(
             name="Schema Validation",
-            runner=run_schema_eval,
+            runner=lambda: run_schema_eval(contexts=contexts),
             skip=False,
             verbose=verbose,
         )
@@ -239,10 +271,10 @@ def run_all_evals(
         if schema_result.status != GateStatus.PASSED:
             has_failure = True
 
-        # Gate 2: Retrieval Eval
+        # Gate 2: Retrieval Eval (uses contexts for actual retrieval validation)
         retrieval_result, _ = run_gate(
             name="Retrieval Quality",
-            runner=run_retrieval_eval,
+            runner=lambda: run_retrieval_eval(contexts=contexts, use_actual_retrieval=True),
             skip=fail_fast and has_failure,
             verbose=verbose,
         )
@@ -250,10 +282,10 @@ def run_all_evals(
         if retrieval_result.status == GateStatus.FAILED:
             has_failure = True
 
-        # Gate 3: Judge Eval (expensive)
+        # Gate 3: Judge Eval (expensive, uses contexts)
         judge_result, _ = run_gate(
             name="LLM-as-Judge",
-            runner=run_judge_eval,
+            runner=lambda: run_judge_eval(contexts=contexts),
             skip=(fail_fast and has_failure) or skip_expensive,
             verbose=verbose,
         )
@@ -261,10 +293,10 @@ def run_all_evals(
         if judge_result.status == GateStatus.FAILED:
             has_failure = True
 
-        # Gate 4: Performance Eval
+        # Gate 4: Performance Eval (uses contexts)
         perf_result, _ = run_gate(
             name="Performance Regression",
-            runner=run_perf_eval,
+            runner=lambda: run_perf_eval(contexts=contexts),
             skip=fail_fast and has_failure,
             verbose=verbose,
         )

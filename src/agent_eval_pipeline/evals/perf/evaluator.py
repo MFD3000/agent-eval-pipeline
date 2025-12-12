@@ -36,6 +36,7 @@ from agent_eval_pipeline.evals.perf.metrics import (
 
 if TYPE_CHECKING:
     from agent_eval_pipeline.golden_sets.thyroid_cases import GoldenCase
+    from agent_eval_pipeline.harness.context import AgentRunContext
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +54,7 @@ DEFAULT_TOKEN_THRESHOLD = 0.20  # 20% more tokens triggers regression
 
 def run_perf_eval(
     cases: list[GoldenCase] | None = None,
+    contexts: list[AgentRunContext] | None = None,
     latency_regression_threshold: float = DEFAULT_LATENCY_THRESHOLD,
     token_regression_threshold: float = DEFAULT_TOKEN_THRESHOLD,
     update_baseline: bool = False,
@@ -64,6 +66,8 @@ def run_perf_eval(
 
     Args:
         cases: Cases to evaluate. Defaults to all golden cases.
+        contexts: Pre-computed agent results (from harness). If provided,
+                  skips running agents and uses cached results.
         latency_regression_threshold: Max allowed latency increase (0.15 = 15%)
         token_regression_threshold: Max allowed token increase (0.20 = 20%)
         update_baseline: If True, update baseline with current results
@@ -72,46 +76,21 @@ def run_perf_eval(
 
     Returns:
         PerfEvalResult with metrics and regression checks
-    """
-    from agent_eval_pipeline.golden_sets.thyroid_cases import get_all_golden_cases
 
+    CONTEXT SHARING:
+    ----------------
+    When called from the harness with contexts, this evaluator uses
+    pre-computed agent results instead of calling run_agent() internally.
+    """
     # Use injected store or create default
     store = baseline_store or get_baseline_store()
 
-    cases = cases or get_all_golden_cases()
-    case_results: list[CasePerformance] = []
-
-    for case in cases:
-        if verbose:
-            print(f"Running perf eval: {case.id}...")
-
-        result = run_agent(case)
-
-        if isinstance(result, AgentError):
-            case_results.append(
-                CasePerformance(
-                    case_id=case.id,
-                    latency_ms=0,
-                    input_tokens=0,
-                    output_tokens=0,
-                    total_tokens=0,
-                    model="",
-                    success=False,
-                    error=result.error_message,
-                )
-            )
-        else:
-            case_results.append(
-                CasePerformance(
-                    case_id=case.id,
-                    latency_ms=result.latency_ms,
-                    input_tokens=result.input_tokens,
-                    output_tokens=result.output_tokens,
-                    total_tokens=result.total_tokens,
-                    model=result.model,
-                    success=True,
-                )
-            )
+    # If contexts provided, use them
+    if contexts is not None:
+        case_results = _build_case_results_from_contexts(contexts, verbose)
+    else:
+        # Legacy path: run agents internally
+        case_results = _run_and_collect(cases, verbose)
 
     # Filter to successful cases for metrics
     successful = [r for r in case_results if r.success]
@@ -175,6 +154,91 @@ def run_perf_eval(
         case_results=case_results,
         failure_reason=failure_reason,
     )
+
+
+def _run_and_collect(
+    cases: list[GoldenCase] | None,
+    verbose: bool,
+) -> list[CasePerformance]:
+    """Legacy path: run agents internally and collect results."""
+    from agent_eval_pipeline.golden_sets.thyroid_cases import get_all_golden_cases
+
+    cases = cases or get_all_golden_cases()
+    case_results: list[CasePerformance] = []
+
+    for case in cases:
+        if verbose:
+            print(f"Running perf eval: {case.id}...")
+
+        result = run_agent(case)
+
+        if isinstance(result, AgentError):
+            case_results.append(
+                CasePerformance(
+                    case_id=case.id,
+                    latency_ms=0,
+                    input_tokens=0,
+                    output_tokens=0,
+                    total_tokens=0,
+                    model="",
+                    success=False,
+                    error=result.error_message,
+                )
+            )
+        else:
+            case_results.append(
+                CasePerformance(
+                    case_id=case.id,
+                    latency_ms=result.latency_ms,
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens,
+                    total_tokens=result.total_tokens,
+                    model=result.model,
+                    success=True,
+                )
+            )
+
+    return case_results
+
+
+def _build_case_results_from_contexts(
+    contexts: list[AgentRunContext],
+    verbose: bool,
+) -> list[CasePerformance]:
+    """Build case results from pre-computed agent contexts."""
+    case_results: list[CasePerformance] = []
+
+    for ctx in contexts:
+        if verbose:
+            print(f"Running perf eval: {ctx.case_id}...")
+
+        if not ctx.success:
+            case_results.append(
+                CasePerformance(
+                    case_id=ctx.case_id,
+                    latency_ms=0,
+                    input_tokens=0,
+                    output_tokens=0,
+                    total_tokens=0,
+                    model="",
+                    success=False,
+                    error=ctx.error_message,
+                )
+            )
+        else:
+            case_results.append(
+                CasePerformance(
+                    case_id=ctx.case_id,
+                    latency_ms=ctx.latency_ms or 0,
+                    input_tokens=ctx.input_tokens or 0,
+                    output_tokens=ctx.output_tokens or 0,
+                    total_tokens=ctx.total_tokens or 0,
+                    model=ctx.model or "",
+                    success=True,
+                )
+            )
+
+    return case_results
 
 
 # ---------------------------------------------------------------------------

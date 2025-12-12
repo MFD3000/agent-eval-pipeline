@@ -43,6 +43,7 @@ from agent_eval_pipeline.evals.judge.prompts import (
 if TYPE_CHECKING:
     from agent_eval_pipeline.schemas.lab_insights import LabInsightsSummary
     from agent_eval_pipeline.golden_sets.thyroid_cases import GoldenCase
+    from agent_eval_pipeline.harness.context import AgentRunContext
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +151,7 @@ def calculate_weighted_score(judge_output: JudgeOutput) -> float:
 
 def run_judge_eval(
     cases: list[GoldenCase] | None = None,
+    contexts: list[AgentRunContext] | None = None,
     threshold: float = 4.2,
     verbose: bool = False,
     client: JudgeClient | None = None,
@@ -159,13 +161,25 @@ def run_judge_eval(
 
     Args:
         cases: Cases to evaluate. Defaults to all golden cases.
+        contexts: Pre-computed agent results (from harness). If provided,
+                  skips running agents and uses cached results.
         threshold: Minimum weighted score to pass. Default 4.2/5.
         verbose: Print progress.
         client: Optional judge client for DI (testing).
 
     Returns:
         JudgeEvalReport with scores for each case.
+
+    CONTEXT SHARING:
+    ----------------
+    When called from the harness with contexts, this evaluator uses
+    pre-computed agent results instead of calling run_agent() internally.
     """
+    # If contexts provided, use them
+    if contexts is not None:
+        return _run_with_contexts(contexts, threshold, verbose, client)
+
+    # Legacy path: run agents internally
     from agent_eval_pipeline.golden_sets.thyroid_cases import get_all_golden_cases
 
     cases = cases or get_all_golden_cases()
@@ -245,7 +259,103 @@ def run_judge_eval(
             )
         )
 
-    # Calculate aggregates
+    return _aggregate_results(results, critical_failures, threshold)
+
+
+def _run_with_contexts(
+    contexts: list[AgentRunContext],
+    threshold: float,
+    verbose: bool,
+    client: JudgeClient | None,
+) -> JudgeEvalReport:
+    """
+    Run judge eval using pre-computed agent contexts.
+
+    This is the context-aware path used by the harness.
+    """
+    results: list[JudgeEvalResult] = []
+    critical_failures: list[str] = []
+
+    for ctx in contexts:
+        if verbose:
+            print(f"Running judge eval: {ctx.case_id}...")
+
+        # Check for agent errors
+        if not ctx.success:
+            if verbose:
+                print(f"  Agent error: {ctx.error_message}")
+            results.append(
+                JudgeEvalResult(
+                    case_id=ctx.case_id,
+                    passed=False,
+                    weighted_score=0.0,
+                    scores={},
+                    reasoning={"error": ctx.error_message},
+                    overall_assessment="Agent failed to produce output",
+                    critical_issues=["Agent error"],
+                )
+            )
+            continue
+
+        # Run the judge on pre-computed output
+        judge_output = run_judge(ctx.case, ctx.output, client=client)
+
+        if judge_output is None:
+            results.append(
+                JudgeEvalResult(
+                    case_id=ctx.case_id,
+                    passed=False,
+                    weighted_score=0.0,
+                    scores={},
+                    reasoning={"error": "Judge failed"},
+                    overall_assessment="Judge evaluation failed",
+                    critical_issues=["Judge error"],
+                )
+            )
+            continue
+
+        # Calculate weighted score
+        weighted_score = calculate_weighted_score(judge_output)
+
+        # Check for critical issues
+        has_critical = len(judge_output.critical_issues) > 0
+        if has_critical:
+            critical_failures.append(f"{ctx.case_id}: {judge_output.critical_issues}")
+
+        # Determine pass/fail
+        passed = weighted_score >= threshold and not has_critical
+
+        results.append(
+            JudgeEvalResult(
+                case_id=ctx.case_id,
+                passed=passed,
+                weighted_score=weighted_score,
+                scores={
+                    "clinical_correctness": judge_output.clinical_correctness.score,
+                    "safety_compliance": judge_output.safety_compliance.score,
+                    "completeness": judge_output.completeness.score,
+                    "clarity": judge_output.clarity.score,
+                },
+                reasoning={
+                    "clinical_correctness": judge_output.clinical_correctness.reasoning,
+                    "safety_compliance": judge_output.safety_compliance.reasoning,
+                    "completeness": judge_output.completeness.reasoning,
+                    "clarity": judge_output.clarity.reasoning,
+                },
+                overall_assessment=judge_output.overall_assessment,
+                critical_issues=judge_output.critical_issues,
+            )
+        )
+
+    return _aggregate_results(results, critical_failures, threshold)
+
+
+def _aggregate_results(
+    results: list[JudgeEvalResult],
+    critical_failures: list[str],
+    threshold: float,
+) -> JudgeEvalReport:
+    """Aggregate individual results into a report."""
     if results:
         valid_results = [r for r in results if r.weighted_score > 0]
         avg_score = (

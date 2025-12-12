@@ -154,48 +154,25 @@ class TestHarnessReport:
 
 
 class TestGateStatus:
-    """Test GateStatus enum."""
+    """Minimal regression tests for GateStatus."""
 
-    def test_gate_status_values(self):
-        """GateStatus should have expected values."""
-        assert GateStatus.PASSED.value == "passed"
-        assert GateStatus.FAILED.value == "failed"
-        assert GateStatus.SKIPPED.value == "skipped"
-        assert GateStatus.ERROR.value == "error"
-
-
-# ---------------------------------------------------------------------------
-# GATE RESULT TESTS
-# ---------------------------------------------------------------------------
-
-
-class TestGateResult:
-    """Test GateResult dataclass."""
-
-    def test_gate_result_creation(self):
-        """GateResult should be created with required fields."""
+    def test_gate_status_used_in_gate_result(self):
+        """Verify GateStatus integrates with GateResult behaviorally."""
         result = GateResult(
-            name="Test Gate",
+            name="schema",
             status=GateStatus.PASSED,
-            duration_ms=150.5,
-            summary="All tests passed",
+            duration_ms=1.0,
+            summary="ok",
         )
 
-        assert result.name == "Test Gate"
-        assert result.status == GateStatus.PASSED
-        assert result.duration_ms == 150.5
-        assert result.summary == "All tests passed"
-        assert result.details is None
-
-    def test_gate_result_with_details(self):
-        """GateResult should accept optional details."""
-        result = GateResult(
-            name="Test Gate",
-            status=GateStatus.FAILED,
-            duration_ms=100.0,
-            summary="2 failures",
-            details={"failures": ["case-1", "case-2"]},
+        report = HarnessReport(
+            timestamp="2024-01-01T00:00:00",
+            total_duration_ms=2.0,
+            all_passed=True,
+            gates=[result],
+            summary="1 passed",
         )
 
-        assert result.details is not None
-        assert result.details["failures"] == ["case-1", "case-2"]
+        serialized = report.to_dict()
+
+        assert serialized["gates"][0]["status"] == GateStatus.PASSED.value

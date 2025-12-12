@@ -126,15 +126,53 @@ def run_agent(
     if agent_type is None:
         agent_type = os.environ.get("AGENT_TYPE", "langgraph").lower()
 
-    if agent_type == "langgraph":
-        return _run_langgraph_agent(case)
-    elif agent_type == "dspy_react":
-        return _run_dspy_react_agent(case)
-    else:
-        return AgentError(
-            error_type="InvalidAgentType",
-            error_message=f"Unknown agent type: {agent_type}. Use 'langgraph' or 'dspy_react'",
-        )
+    # Import tracer and attributes for observability
+    from agent_eval_pipeline.observability.tracer import get_tracer
+    from agent_eval_pipeline.observability.attributes import (
+        AGENT_TYPE,
+        EVAL_CASE_ID,
+        GEN_AI_REQUEST_MODEL,
+    )
+
+    tracer = get_tracer()
+
+    # Create parent span with agent type clearly visible
+    span_name = f"agent.run.{agent_type}"
+    with tracer.start_span(span_name, attributes={
+        AGENT_TYPE: agent_type,
+        EVAL_CASE_ID: case.id,
+        "agent.case_description": case.description,
+    }) as span:
+        if agent_type == "langgraph":
+            result = _run_langgraph_agent(case)
+        elif agent_type == "dspy_react":
+            result = _run_dspy_react_agent(case)
+        else:
+            return AgentError(
+                error_type="InvalidAgentType",
+                error_message=f"Unknown agent type: {agent_type}. Use 'langgraph' or 'dspy_react'",
+            )
+
+        # Add result attributes to span
+        if isinstance(result, AgentResult):
+            span.set_attribute(GEN_AI_REQUEST_MODEL, result.model)
+            span.set_attribute("agent.latency_ms", result.latency_ms)
+            span.set_attribute("agent.total_tokens", result.total_tokens)
+            span.set_attribute("agent.success", True)
+            if result.retrieved_docs:
+                span.set_attribute("agent.retrieved_doc_count", len(result.retrieved_docs))
+            if result.tools_used:
+                span.set_attribute("agent.tools_used", ",".join(result.tools_used))
+            if result.reasoning_steps:
+                span.set_attribute("agent.reasoning_steps", result.reasoning_steps)
+            span.set_status("ok")
+        else:
+            span.set_attribute("agent.success", False)
+            span.set_attribute("agent.error_type", result.error_type)
+            span.set_attribute("agent.error_message", result.error_message)
+            span.set_status("error", result.error_message)
+
+        return result
 
 
 def _run_langgraph_agent(case: GoldenCase) -> AgentResult | AgentError:

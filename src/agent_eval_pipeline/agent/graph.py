@@ -7,6 +7,11 @@ This separation means:
 - Graph structure can change without touching node logic
 - Dependencies are explicit and injectable
 
+STREAMING SUPPORT:
+------------------
+Pass streaming=True to enable token streaming for better perceived latency.
+Use on_token callback to receive tokens as they arrive for real-time UI updates.
+
 INTERVIEW TALKING POINT:
 ------------------------
 "The graph module is pure orchestration. It takes injected dependencies
@@ -17,7 +22,7 @@ implementations - mock stores for testing, real stores for production."
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
@@ -36,6 +41,8 @@ if TYPE_CHECKING:
 def build_agent_graph(
     store: VectorStore,
     model: ChatOpenAI | None = None,
+    streaming: bool = False,
+    on_token: Callable[[str], None] | None = None,
 ) -> StateGraph:
     """
     Build the LangGraph agent workflow with injected dependencies.
@@ -46,6 +53,8 @@ def build_agent_graph(
     Args:
         store: VectorStore implementation for retrieval
         model: Optional ChatOpenAI for analysis (creates default if None)
+        streaming: If True, stream tokens for better perceived latency
+        on_token: Callback for each token during streaming (for real-time UI)
 
     Returns:
         Compiled StateGraph ready for invocation
@@ -54,6 +63,10 @@ def build_agent_graph(
         # Production
         store = get_vector_store(use_postgres=True)
         graph = build_agent_graph(store)
+
+        # With streaming
+        def print_token(t): print(t, end="", flush=True)
+        graph = build_agent_graph(store, streaming=True, on_token=print_token)
 
         # Testing
         mock_store = InMemoryVectorStore(MockEmbeddings())
@@ -65,7 +78,7 @@ def build_agent_graph(
 
     # Create nodes with injected dependencies
     retrieve_node = create_retrieve_node(store)
-    analyze_node = create_analyze_node(model)
+    analyze_node = create_analyze_node(model, streaming=streaming, on_token=on_token)
 
     # Add nodes to graph
     workflow.add_node("retrieve_context", retrieve_node)

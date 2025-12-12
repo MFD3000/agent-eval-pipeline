@@ -149,4 +149,7 @@ SAFETY NOTES:
 EXPECTED SEMANTIC POINTS (should be covered):
 {chr(10).join('- ' + p for p in case.expected_semantic_points)}
 
+PROHIBITED PHRASES (must NOT appear - automatic failure if found):
+{chr(10).join('- ' + p for p in case.must_not_contain) if case.must_not_contain else '- None specified'}
+
 Please evaluate this response according to the rubric."""

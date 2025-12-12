@@ -45,10 +45,16 @@ the PR is blocked. This catches when embedding model changes or
 chunking strategy modifications break document retrieval."
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 import random
+from typing import TYPE_CHECKING
 
 from agent_eval_pipeline.golden_sets.thyroid_cases import GoldenCase, get_all_golden_cases
+
+if TYPE_CHECKING:
+    from agent_eval_pipeline.harness.context import AgentRunContext
 
 
 # ---------------------------------------------------------------------------
@@ -240,6 +246,8 @@ DEFAULT_RETRIEVAL_SEED = 42
 
 def run_retrieval_eval(
     cases: list[GoldenCase] | None = None,
+    contexts: list[AgentRunContext] | None = None,
+    use_actual_retrieval: bool = False,
     threshold: float = 0.8,
     verbose: bool = False,
     seed: int | None = DEFAULT_RETRIEVAL_SEED,
@@ -249,6 +257,11 @@ def run_retrieval_eval(
 
     Args:
         cases: Cases to evaluate. Defaults to all golden cases.
+        contexts: Pre-computed agent results (from harness). If provided,
+                  enables use_actual_retrieval mode.
+        use_actual_retrieval: If True and contexts provided, validate against
+                              actual retrieved_docs from agent runs instead of
+                              simulated retrieval.
         threshold: Minimum F1 score to pass. Default 0.8.
         verbose: Print progress.
         seed: Random seed for reproducible results. Default 42.
@@ -256,7 +269,18 @@ def run_retrieval_eval(
 
     Returns:
         RetrievalEvalReport with metrics for each case.
+
+    CONTEXT SHARING:
+    ----------------
+    When use_actual_retrieval=True with contexts, this evaluator validates
+    against REAL documents retrieved during agent execution, not simulated
+    retrieval. This catches actual RAG pipeline issues.
     """
+    # If using actual retrieval from contexts
+    if use_actual_retrieval and contexts is not None:
+        return _run_with_actual_retrieval(contexts, threshold, verbose)
+
+    # Legacy path: simulated retrieval
     cases = cases or get_all_golden_cases()
     results: list[RetrievalEvalResult] = []
 
@@ -305,6 +329,84 @@ def run_retrieval_eval(
         total_cases=len(results),
         passed_cases=passed,
         failed_cases=len(results) - passed,
+        avg_recall=avg_recall,
+        avg_precision=avg_precision,
+        avg_f1=avg_f1,
+        threshold=threshold,
+        results=results,
+    )
+
+
+def _run_with_actual_retrieval(
+    contexts: list[AgentRunContext],
+    threshold: float,
+    verbose: bool,
+) -> RetrievalEvalReport:
+    """
+    Run retrieval eval using actual retrieved documents from agent runs.
+
+    This validates against REAL documents retrieved during agent execution,
+    catching actual RAG pipeline issues instead of using simulated retrieval.
+    """
+    results: list[RetrievalEvalResult] = []
+
+    for ctx in contexts:
+        if verbose:
+            print(f"Running retrieval eval: {ctx.case_id}...")
+
+        # Skip cases without retrieval expectations
+        if not ctx.case.expected_doc_ids:
+            if verbose:
+                print(f"  Skipping {ctx.case_id} - no expected docs defined")
+            continue
+
+        # Skip failed agent runs
+        if not ctx.success:
+            if verbose:
+                print(f"  Skipping {ctx.case_id} - agent failed")
+            continue
+
+        # Get actual retrieved document IDs from the agent run
+        # The agent stores retrieved docs in result.retrieved_docs
+        actual_doc_ids = []
+        for doc in ctx.retrieved_docs:
+            # Handle both dict format and potential other formats
+            if isinstance(doc, dict):
+                doc_id = doc.get("id") or doc.get("doc_id") or doc.get("document_id")
+                if doc_id:
+                    actual_doc_ids.append(doc_id)
+
+        # Calculate metrics against expected docs
+        metrics = calculate_retrieval_metrics(actual_doc_ids, ctx.case.expected_doc_ids)
+
+        # Determine pass/fail
+        passed = metrics.f1_score >= threshold
+
+        results.append(RetrievalEvalResult(
+            case_id=ctx.case_id,
+            passed=passed,
+            metrics=metrics,
+        ))
+
+        if verbose:
+            status = "PASS" if passed else "FAIL"
+            print(f"  [{status}] F1: {metrics.f1_score:.2f} "
+                  f"(retrieved: {len(actual_doc_ids)}, expected: {len(ctx.case.expected_doc_ids)})")
+
+    # Calculate aggregates
+    if results:
+        avg_recall = sum(r.metrics.recall for r in results) / len(results)
+        avg_precision = sum(r.metrics.precision for r in results) / len(results)
+        avg_f1 = sum(r.metrics.f1_score for r in results) / len(results)
+        passed_count = sum(1 for r in results if r.passed)
+    else:
+        avg_recall = avg_precision = avg_f1 = 0.0
+        passed_count = 0
+
+    return RetrievalEvalReport(
+        total_cases=len(results),
+        passed_cases=passed_count,
+        failed_cases=len(results) - passed_count,
         avg_recall=avg_recall,
         avg_precision=avg_precision,
         avg_f1=avg_f1,

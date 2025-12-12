@@ -60,6 +60,16 @@ def register_instrumentors() -> bool:
     except Exception as e:
         logger.warning(f"Failed to instrument DSPy: {e}")
 
+    # LiteLLM (used by DSPy under the hood)
+    try:
+        from openinference.instrumentation.litellm import LiteLLMInstrumentor
+        LiteLLMInstrumentor().instrument()
+        registered.append("litellm")
+    except ImportError:
+        logger.debug("LiteLLM instrumentor not available")
+    except Exception as e:
+        logger.warning(f"Failed to instrument LiteLLM: {e}")
+
     if registered:
         logger.info(f"Registered instrumentors: {', '.join(registered)}")
         _instrumented = True
@@ -87,6 +97,12 @@ def uninstrument() -> None:
     try:
         from openinference.instrumentation.dspy import DSPyInstrumentor
         DSPyInstrumentor().uninstrument()
+    except (ImportError, Exception):
+        pass
+
+    try:
+        from openinference.instrumentation.litellm import LiteLLMInstrumentor
+        LiteLLMInstrumentor().uninstrument()
     except (ImportError, Exception):
         pass
 

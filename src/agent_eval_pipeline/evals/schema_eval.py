@@ -30,20 +30,46 @@ FAILURE MODES THIS CATCHES:
 - Missing required fields
 - Type mismatches (string where float expected)
 
-INTERVIEW TALKING POINT:
-------------------------
-"Schema validation is our first gate because it's fast and catches
-structural regressions immediately. If a prompt change breaks the
-JSON format or introduces invalid enum values, we catch it before
-wasting compute on semantic evaluation."
+
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
 from pydantic import ValidationError
 
 from agent_eval_pipeline.schemas.lab_insights import LabInsightsSummary
 from agent_eval_pipeline.golden_sets.thyroid_cases import GoldenCase, get_all_golden_cases
 from agent_eval_pipeline.agent import run_agent, AgentResult, AgentError
+
+if TYPE_CHECKING:
+    from agent_eval_pipeline.harness.context import AgentRunContext
+
+
+def _get_all_output_text(output: LabInsightsSummary) -> str:
+    """
+    Extract all text content from output for prohibited phrase checking.
+
+    Combines summary, insights, recommendations, lifestyle, and safety notes
+    into a single searchable string.
+    """
+    text_parts = [output.summary]
+
+    for insight in output.key_insights:
+        text_parts.extend([
+            insight.clinical_relevance,
+            insight.action,
+        ])
+
+    text_parts.extend(output.recommended_topics_for_doctor)
+    text_parts.extend(output.lifestyle_considerations)
+
+    for note in output.safety_notes:
+        text_parts.append(note.message)
+
+    return " ".join(text_parts)
 
 
 @dataclass
@@ -119,6 +145,14 @@ def validate_case_output(
             if phrase in summary_lower:
                 errors.append(f"Contains diagnostic language: '{phrase}'")
 
+    # Check must_not_contain prohibited phrases across all text fields
+    if case.must_not_contain:
+        # Combine all text content for searching
+        all_text = _get_all_output_text(output).lower()
+        for phrase in case.must_not_contain:
+            if phrase.lower() in all_text:
+                errors.append(f"Contains prohibited phrase: '{phrase}'")
+
     if errors or invalid_values:
         return SchemaEvalResult(
             case_id=case.id,
@@ -132,6 +166,7 @@ def validate_case_output(
 
 def run_schema_eval(
     cases: list[GoldenCase] | None = None,
+    contexts: list[AgentRunContext] | None = None,
     verbose: bool = False,
 ) -> SchemaEvalReport:
     """
@@ -139,11 +174,26 @@ def run_schema_eval(
 
     Args:
         cases: Optional list of cases to run. Defaults to all golden cases.
+        contexts: Pre-computed agent results (from harness). If provided,
+                  skips running agents and uses cached results.
         verbose: If True, print progress during execution.
 
     Returns:
         SchemaEvalReport with pass/fail for each case.
+
+    CONTEXT SHARING:
+    ----------------
+    When called from the harness with contexts, this evaluator uses
+    pre-computed agent results instead of calling run_agent() internally.
+    This provides:
+    - 4-5x reduction in LLM API calls per evaluation run
+    - Consistent evaluation (all gates score the same output)
     """
+    # If contexts provided, use them; otherwise run agents (backwards compat)
+    if contexts is not None:
+        return _run_with_contexts(contexts, verbose)
+
+    # Legacy path: run agents internally
     cases = cases or get_all_golden_cases()
     results: list[SchemaEvalResult] = []
 
@@ -171,6 +221,54 @@ def run_schema_eval(
         except Exception as e:
             results.append(SchemaEvalResult(
                 case_id=case.id,
+                passed=False,
+                error=f"Validation error: {str(e)}",
+            ))
+
+    # Calculate aggregate metrics
+    passed = sum(1 for r in results if r.passed)
+    failed = len(results) - passed
+
+    return SchemaEvalReport(
+        total_cases=len(results),
+        passed_cases=passed,
+        failed_cases=failed,
+        pass_rate=passed / len(results) if results else 0.0,
+        results=results,
+    )
+
+
+def _run_with_contexts(
+    contexts: list[AgentRunContext],
+    verbose: bool = False,
+) -> SchemaEvalReport:
+    """
+    Run schema eval using pre-computed agent contexts.
+
+    This is the context-aware path used by the harness.
+    """
+    results: list[SchemaEvalResult] = []
+
+    for ctx in contexts:
+        if verbose:
+            print(f"Running schema eval: {ctx.case_id}...")
+
+        # Check for agent errors
+        if not ctx.success:
+            results.append(SchemaEvalResult(
+                case_id=ctx.case_id,
+                passed=False,
+                error=ctx.error_message,
+            ))
+            continue
+
+        # Validate the output
+        try:
+            result = validate_case_output(ctx.case, ctx.output)
+            results.append(result)
+        except Exception as e:
+            results.append(SchemaEvalResult(
+                case_id=ctx.case_id,
                 passed=False,
                 error=f"Validation error: {str(e)}",
             ))
